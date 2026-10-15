@@ -1742,9 +1742,14 @@ export type OperationName = z.infer<typeof operationSchema>["operation"];
 export const operationNames: ReadonlySet<string> = new Set(
   operationSchema.options.map((option) => option.shape.operation.value),
 );
-/** Updater inspection/cancellation owns no media resources and must remain usable during admission. */
-export const updateCommandOperations: ReadonlySet<string> = new Set(
-  [...operationNames].filter((name) => name.startsWith("update.")),
+
+/**
+ * Operations the native app owns and answers on its own socket: updating, the installed command
+ * and skill, and the login item. They must keep working when the service cannot, since an update
+ * is how a broken service gets fixed.
+ */
+export const appOperations: ReadonlySet<string> = new Set(
+  [...operationNames].filter((name) => /^(update|skill|cli|login)\./.test(name)),
 );
 
 const nativeCall = DEFAULT_CALL_TIMEOUT_MS;

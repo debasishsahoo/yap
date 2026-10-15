@@ -87,6 +87,7 @@ import {
   updateControlOperations,
   type UpdateStatus,
   type UpdateBlocker,
+  appOperations,
 } from "@yap/protocol";
 import {
   listenLocal,
@@ -1081,6 +1082,11 @@ export async function startProjectService(options: {
       if (closing) return operationError("SERVICE_STOPPED", "Service is closing", true);
       if (!operationNames.has(request.operation))
         return operationError("UNKNOWN_OPERATION", "Unknown service operation");
+      if (appOperations.has(request.operation))
+        return operationError(
+          "UNKNOWN_OPERATION",
+          `${request.operation} is answered by the app on its own socket, not the service`,
+        );
       const parsed = admitOperation({ operation: request.operation, params: request.params });
       if (!parsed.ok) return parsed;
       const operation = parsed.data;
@@ -1138,26 +1144,6 @@ export async function startProjectService(options: {
               },
             };
           }
-          case "update.status":
-          case "update.check":
-          case "update.setEnabled":
-          case "skill.status":
-          case "skill.install":
-          case "skill.uninstall":
-          case "skill.update":
-          case "cli.status":
-          case "cli.install":
-          case "cli.uninstall":
-            return controller
-              ? await controller.call(operation.operation, operation.params)
-              : operation.operation.startsWith("skill.")
-                ? operationError("SKILL_UNAVAILABLE", "No native skill manager is connected.")
-                : operation.operation.startsWith("cli.")
-                  ? operationError(
-                      "CLI_UNAVAILABLE",
-                      "No native command-line tool manager is connected.",
-                    )
-                  : operationError("UPDATE_UNAVAILABLE", "No native updater is connected.");
           case "service.health":
             return {
               ok: true,

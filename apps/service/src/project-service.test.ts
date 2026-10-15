@@ -30,7 +30,7 @@ import { EventEmitter } from "node:events";
 import { projectPackageManifest } from "@yap/core/project-package";
 import { fileIdentity } from "@yap/core/files";
 import type { ProjectSnapshot } from "@yap/core/projects";
-import { CONTROL_FRAME_BYTES, updatePreparationSchema } from "@yap/protocol";
+import { CONTROL_FRAME_BYTES, appOperations, updatePreparationSchema } from "@yap/protocol";
 const cleanups: (() => Promise<void>)[] = [];
 afterEach(async () => {
   vi.restoreAllMocks();
@@ -116,108 +116,20 @@ test("correspondence receipts are admitted and paged without declaring an edit",
   });
 });
 
-test("socket and app requests share native update controls and preserve native refusals", async () => {
+test("the service leaves the app's own operations to the app", async () => {
   const f = await projectServiceControlFixture(cleanups, async () => ({ ok: true, data: {} }));
-  let enabled = false;
-  let checking = false;
-  f.events.on("call", ({ request }) => {
-    if (request.operation === "update.setEnabled") enabled = request.params.enabled;
-    const response =
-      request.operation === "update.check" && checking
-        ? {
-            ok: false,
-            error: {
-              code: "UPDATE_BUSY",
-              message: "An update is already in progress.",
-              retryable: true,
-              details: {},
-            },
-          }
-        : {
-            ok: true,
-            data: { enabled, checking: (checking ||= request.operation === "update.check") },
-          };
-    f.input.write(
-      JSON.stringify({ event: "result", response: { id: request.id, ...response } }) + "\n",
-    );
-  });
-  expect(await f.call("update.status", {})).toMatchObject({
-    ok: true,
-    data: { enabled: false, checking: false },
-  });
-  expect(await f.control("update.setEnabled", { enabled: true })).toMatchObject({
-    ok: true,
-    data: { enabled: true },
-  });
-  expect(await f.call("update.setEnabled", { enabled: false })).toMatchObject({
-    ok: true,
-    data: { enabled: false },
-  });
-  expect(await f.call("update.check", {})).toMatchObject({
-    ok: true,
-    data: { enabled: false, checking: true },
-  });
-  expect(await f.control("update.check")).toMatchObject({
-    ok: false,
-    error: { code: "UPDATE_BUSY", retryable: true },
-  });
-  expect(await f.call("update.setEnabled", { enabled: "yes" })).toMatchObject({
-    ok: false,
-    error: { code: "INVALID_PARAMS" },
-  });
-});
-
-test("socket requests expose native skill lifecycle controls", async () => {
-  const f = await projectServiceControlFixture(cleanups, async () => ({ ok: true, data: {} }));
-  const seen: string[] = [];
-  f.events.on("call", ({ request }) => {
-    seen.push(request.operation);
-    f.input.write(
-      JSON.stringify({
-        event: "result",
-        response: { id: request.id, ok: true, data: { state: request.operation } },
-      }) + "\n",
-    );
-  });
-  for (const operation of ["skill.status", "skill.install", "skill.uninstall", "skill.update"]) {
-    expect(await f.call(operation, {})).toMatchObject({
-      ok: true,
-      data: { state: operation },
-    });
+  const forwarded: string[] = [];
+  f.events.on("call", ({ request }) => forwarded.push(request.operation));
+  for (const operation of appOperations) {
+    const params = operation.endsWith("setEnabled") ? { enabled: true } : {};
+    const answer = await f.call(operation, params);
+    expect(answer).toMatchObject({ ok: false, error: { code: "UNKNOWN_OPERATION" } });
+    expect(answer.ok === false && answer.error.message).toContain("answered by the app");
   }
-  expect(seen).toEqual(["skill.status", "skill.install", "skill.uninstall", "skill.update"]);
-  expect(await f.call("skill.status", { extra: true })).toMatchObject({
-    ok: false,
-    error: { code: "INVALID_PARAMS" },
-  });
+  expect(forwarded).toEqual([]);
 });
 
-test("socket requests expose native command-line tool controls", async () => {
-  const f = await projectServiceControlFixture(cleanups, async () => ({ ok: true, data: {} }));
-  const seen: string[] = [];
-  f.events.on("call", ({ request }) => {
-    seen.push(request.operation);
-    f.input.write(
-      JSON.stringify({
-        event: "result",
-        response: { id: request.id, ok: true, data: { state: request.operation } },
-      }) + "\n",
-    );
-  });
-  for (const operation of ["cli.status", "cli.install", "cli.uninstall"]) {
-    expect(await f.call(operation, {})).toMatchObject({
-      ok: true,
-      data: { state: operation },
-    });
-  }
-  expect(seen).toEqual(["cli.status", "cli.install", "cli.uninstall"]);
-  expect(await f.call("cli.install", { extra: true })).toMatchObject({
-    ok: false,
-    error: { code: "INVALID_PARAMS" },
-  });
-});
-
-test("prepared admission keeps update inspection and opt-out accessible while product work remains fenced", async () => {
+test("prepared admission fences product work until the permit is released", async () => {
   const f = await projectServiceControlFixture(cleanups, async () => ({ ok: true, data: {} }));
   f.events.on("call", ({ request }) => {
     f.input.write(
@@ -238,9 +150,6 @@ test("prepared admission keeps update inspection and opt-out accessible while pr
       return permitId;
     })
     .toBeDefined();
-  expect(await f.call("update.status", {})).toMatchObject({ ok: true, data: { enabled: false } });
-  expect(await f.control("update.setEnabled", { enabled: false })).toMatchObject({ ok: true });
-  expect(await f.call("update.setEnabled", { enabled: false })).toMatchObject({ ok: true });
   expect(await f.call("capture.sources", {})).toMatchObject({
     ok: false,
     error: { code: "UPDATING" },

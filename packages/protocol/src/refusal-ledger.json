@@ -249,7 +249,6 @@
     "CLI_UNAVAILABLE": {
       "category": "missing-prerequisite",
       "files": {
-        "apps/service/src/project-service.ts": 1,
         "skills/yap/scripts/batch-prepare.mjs": 1,
         "skills/yap/scripts/yap-cli.mjs": 1
       }
@@ -1690,12 +1689,6 @@
         "apps/service/src/startup.ts": 6
       }
     },
-    "SKILL_UNAVAILABLE": {
-      "category": "missing-prerequisite",
-      "files": {
-        "apps/service/src/project-service.ts": 1
-      }
-    },
     "SMPTE_ST_2084_PQ": {
       "category": "not-a-refusal",
       "files": {
@@ -1838,7 +1831,7 @@
       "files": {
         "apps/cli/src/main.ts": 2,
         "apps/service/src/index.ts": 1,
-        "apps/service/src/project-service.ts": 1,
+        "apps/service/src/project-service.ts": 2,
         "helpers/mac/Sources/YapWire/Wire.swift": 1
       }
     },
@@ -1965,12 +1958,6 @@
         "apps/service/src/archive-input.ts": 1,
         "packages/core/src/files.ts": 1,
         "packages/core/src/storage.ts": 1
-      }
-    },
-    "UPDATE_UNAVAILABLE": {
-      "category": "missing-prerequisite",
-      "files": {
-        "apps/service/src/project-service.ts": 1
       }
     },
     "WRITE_FAILED": {

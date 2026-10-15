@@ -13,7 +13,6 @@ import {
   type OperationRequest,
   type OperationResult,
   updateControlOperations,
-  updateCommandOperations,
 } from "@yap/protocol";
 
 export type ControlChannel = {
@@ -99,11 +98,7 @@ export function openControl(options: {
   const answer = (request: OperationRequest): void => {
     const product = !updateControlOperations.has(request.operation);
     const refusal =
-      product &&
-      request.operation !== "capture.report" &&
-      !updateCommandOperations.has(request.operation)
-        ? options.admission?.refusal()
-        : undefined;
+      product && request.operation !== "capture.report" ? options.admission?.refusal() : undefined;
     if (refusal) {
       reply({ id: request.id, ...refusal });
       return;

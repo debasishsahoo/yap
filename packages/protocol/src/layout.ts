@@ -16,3 +16,8 @@ export function serviceRuntimeDirectory(home: string): string {
 export function serviceSocketPath(runtimeDirectory: string): string {
   return join(runtimeDirectory, "service.sock");
 }
+
+/** The native app's own socket: it answers the operations it owns without the service. */
+export function appSocketPath(runtimeDirectory: string): string {
+  return join(runtimeDirectory, "app.sock");
+}

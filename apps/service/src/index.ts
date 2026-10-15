@@ -21,7 +21,6 @@ import {
   type OperationWireRequest,
   type OperationResult,
   updateControlOperations,
-  updateCommandOperations,
 } from "@yap/protocol";
 
 export type LocalHandler = (
@@ -166,9 +165,7 @@ export async function listenLocal(options: {
         reply(operationError("UNKNOWN_OPERATION", "Unknown service operation"));
         return;
       }
-      const refusal = updateCommandOperations.has(operation.operation)
-        ? undefined
-        : options.admission?.refusal();
+      const refusal = options.admission?.refusal();
       if (refusal) {
         reply(refusal);
         return;

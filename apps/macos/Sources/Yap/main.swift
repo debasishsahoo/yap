@@ -21,6 +21,7 @@ private struct ServiceHealth: Decodable {
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var controls: RecordingControls?
     private var service: ServiceHost?
+    private var appSocket: AppSocket?
     /// Counts service starts; state reports from a service that has since been replaced are ignored.
     private var serviceGeneration = 0
     private var controller: CaptureController?
@@ -83,6 +84,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         refreshUpdateControls()
         probe = ControlsProbe.requested(controls: controls)
+        startAppSocket()
         startService(capture: controller)
         // A launch that serves a client request starts the service and nothing else: nobody asked
         // to see this app, so no window of it comes forward.
@@ -172,6 +174,38 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         })
     }
 
+    /// The app's own operations, answered on its socket so they work without the service.
+    private func startAppSocket() {
+        let runtime = (personalRoot() as NSString).appendingPathComponent("run")
+        mkdir(runtime, 0o700)
+        // These operations carry no more than a flag; the bound only stops a runaway caller.
+        let socket = AppSocket(path: (runtime as NSString).appendingPathComponent("app.sock"),
+                               maxRequestBytes: 64 * 1024) { [weak self] operation, params, answer in
+            Task { @MainActor [weak self] in
+                answer(self?.handleAppOperation(operation, params)
+                    ?? .failure(ServiceFailure(code: "APP_CLOSING", message: "The app is closing.")))
+            }
+        }
+        do {
+            try socket.start()
+            appSocket = socket
+        } catch {
+            diagnostic("app socket unavailable code=\(error.code) message=\(error.message)")
+        }
+    }
+
+    private func handleAppOperation(_ operation: String, _ params: Data) -> Result<Data, ServiceFailure> {
+        if operation.hasPrefix("update.") { return handleUpdate(operation, params) }
+        if operation.hasPrefix("login.") { return handleLogin(operation, params) }
+        if operation.hasPrefix("skill.") || operation.hasPrefix("cli.") {
+            guard let controls else {
+                return .failure(ServiceFailure(code: "APP_STARTING", message: "The app is still starting.", retryable: true))
+            }
+            return controls.handleHome(operation)
+        }
+        return .failure(ServiceFailure(code: "UNKNOWN_OPERATION", message: "The app does not answer \(operation)."))
+    }
+
     private func handleUpdate(_ operation: String, _ params: Data) -> Result<Data, ServiceFailure> {
         sparkle?.handle(operation, params)
             ?? .failure(ServiceFailure(code: "UPDATE_UNAVAILABLE", message: "Updates are installed manually in this build."))
@@ -226,23 +260,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                         bundle: bundle,
                         onNativeCall: { [weak self] operation, params, answer in
                             Task { @MainActor [weak self] in
-                                if ["update.status", "update.check", "update.setEnabled"].contains(operation) {
-                                    guard let self else {
-                                        answer(.failure(ServiceFailure(code: "UPDATE_UNAVAILABLE", message: "No native updater is connected.")))
-                                        return
-                                    }
-                                    answer(self.handleUpdate(operation, params))
-                                } else if operation == "login.status" || operation == "login.setEnabled" {
-                                    answer(self?.handleLogin(operation, params) ?? .failure(ServiceFailure(code: "LOGIN_UNAVAILABLE", message: "The native app is not available.")))
-                                } else if operation.hasPrefix("skill.") || operation.hasPrefix("cli.") {
-                                    guard let controls = self?.controls else {
-                                        answer(.failure(operation.hasPrefix("cli.")
-                                            ? ServiceFailure(code: "CLI_UNAVAILABLE", message: "No native command-line tool manager is connected.")
-                                            : ServiceFailure(code: "SKILL_UNAVAILABLE", message: "No native skill manager is connected.")))
-                                        return
-                                    }
-                                    answer(controls.handleHome(operation))
-                                } else if operation == "inspect.open" {
+                                if operation == "inspect.open" {
                                     guard let controls = self?.controls else {
                                         answer(.failure(ServiceFailure(code: "INSPECT_UNAVAILABLE", message: "The native inspector is not available.")))
                                         return
@@ -398,6 +416,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Cancellation prevents another candidate or a late service launch.
         startup?.waitUntilFinished()
         probe?.stop()
+        appSocket?.stop()
         if !updaterTermination { service?.shutdown() }
         fixture?.close()
     }

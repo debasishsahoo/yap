@@ -20,7 +20,7 @@ import { parseArgs } from "node:util";
 import { z } from "zod";
 import {
   callLocal,
-  resolveServiceSocket,
+  resolveOperationSocket,
   LocalTransportError,
   type ServiceSelection,
 } from "@yap/client";
@@ -187,7 +187,10 @@ async function mcp(selection: ServiceSelection) {
       release = exclusion.hold();
       const sending = request(id, call.params.name, call.params.arguments ?? {});
       const selected = {
-        socketPath: await resolveServiceSocket({ ...selection, signal: extra.signal }),
+        socketPath: await resolveOperationSocket(sending.operation, {
+          ...selection,
+          signal: extra.signal,
+        }),
         signal: extra.signal,
       };
       const answer = await invoke(selected, sending, mcpInlineBytes(extra.requestId));
@@ -317,7 +320,10 @@ async function main() {
     selection.signal = controller.signal;
   }
   try {
-    const selected = { ...selection, socketPath: await resolveServiceSocket(selection) };
+    const selected = {
+      ...selection,
+      socketPath: await resolveOperationSocket(operation, selection),
+    };
     let result = await invoke(selected, sending);
     if (waitRequested && result.ok)
       result = await waitForWork({

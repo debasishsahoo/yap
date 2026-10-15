@@ -1316,3 +1316,36 @@ it(
     ).toBe(true);
   },
 );
+
+it("app operations reach the app directly, so they work while the service is down", async () => {
+  const home = await mkdtemp("/tmp/yap-app-route-");
+  cleanup.push(() => rm(home, { recursive: true, force: true }));
+  await mkdir(join(home, "run"), { recursive: true, mode: 0o700 });
+  const asked: string[] = [];
+  // The app's own listener; no service socket exists at all.
+  const app = createServer((socket) => {
+    let buffered = "";
+    socket.on("data", (chunk) => {
+      buffered += chunk;
+      const end = buffered.indexOf("\n");
+      if (end < 0) return;
+      const request = JSON.parse(buffered.slice(0, end));
+      asked.push(request.operation);
+      socket.end(JSON.stringify({ id: request.id, ok: true, data: { answeredBy: "app" } }) + "\n");
+    });
+  });
+  await new Promise<void>((resolve) => app.listen(join(home, "run/app.sock"), resolve));
+  cleanup.push(() => new Promise<void>((resolve) => app.close(() => resolve())));
+  const env = { ...process.env, YAP_HOME: home, YAP_APP: "must-not-launch" };
+  for (const operation of ["update.status", "login.status"]) {
+    const reply = await runCli([operation, "--id", `route-${operation}`], env);
+    expect(reply.status, reply.stdout + reply.stderr).toBe(0);
+    expect(JSON.parse(reply.stdout)).toEqual({
+      id: `route-${operation}`,
+      ok: true,
+      data: { answeredBy: "app" },
+    });
+  }
+  // Discovery's own probe is update.status; nothing else reached the app.
+  expect(new Set(asked)).toEqual(new Set(["update.status", "login.status"]));
+});

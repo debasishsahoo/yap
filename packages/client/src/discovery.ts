@@ -6,6 +6,8 @@ import { isAbsolute, join } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import {
   DEFAULT_CALL_TIMEOUT_MS,
+  appOperations,
+  appSocketPath,
   personalHome,
   serviceRuntimeDirectory,
   serviceSocketPath,
@@ -36,8 +38,30 @@ export type ServiceSelection = {
   budgetMs?: number | undefined;
 };
 
+/** Where an endpoint listens, how to ask whether it answers, and what to call it in errors. */
+type Endpoint = { socketPath: (runtimeDirectory: string) => string; probe: string; name: string };
+const service: Endpoint = {
+  socketPath: serviceSocketPath,
+  probe: "service.health",
+  name: "Service",
+};
+// Any answer proves the app is listening, including a build that installs updates manually.
+const app: Endpoint = { socketPath: appSocketPath, probe: "update.status", name: "App" };
+
 /** Discovery sends only health probes. The caller sends its operation once after this returns. */
-export async function resolveServiceSocket(options: ServiceSelection = {}): Promise<string> {
+export function resolveServiceSocket(options: ServiceSelection = {}): Promise<string> {
+  return resolveEndpoint(service, options);
+}
+
+/** The socket that answers `operation`: the app's for the operations it owns, else the service's. */
+export function resolveOperationSocket(
+  operation: string,
+  options: ServiceSelection = {},
+): Promise<string> {
+  return resolveEndpoint(appOperations.has(operation) ? app : service, options);
+}
+
+async function resolveEndpoint(endpoint: Endpoint, options: ServiceSelection): Promise<string> {
   if (options.socketPath !== undefined) return options.socketPath;
   const env = options.env ?? process.env;
   const controller = new AbortController();
@@ -47,7 +71,7 @@ export async function resolveServiceSocket(options: ServiceSelection = {}): Prom
     );
   options.signal?.addEventListener("abort", abort, { once: true });
   if (options.signal?.aborted) abort();
-  const socketPath = serviceSocketPath(serviceRuntimeDirectory(personalHome(env)));
+  const socketPath = endpoint.socketPath(serviceRuntimeDirectory(personalHome(env)));
   let timer: NodeJS.Timeout | undefined;
   const expireAfter = (budgetMs: number, budget: string) => {
     clearTimeout(timer);
@@ -56,7 +80,7 @@ export async function resolveServiceSocket(options: ServiceSelection = {}): Prom
         controller.abort(
           new LocalTransportError(
             "TIMEOUT",
-            `Service at ${socketPath} did not become ready within the ${budgetMs} ms ${budget}. ` +
+            `${endpoint.name} at ${socketPath} did not become ready within the ${budgetMs} ms ${budget}. ` +
               "No request was sent. Check the app's service status, or pass an explicit socket.",
           ),
         ),
@@ -76,7 +100,7 @@ export async function resolveServiceSocket(options: ServiceSelection = {}): Prom
     // The race also bounds filesystem inspection, which has no AbortSignal API. The
     // discovery branch checks cancellation again before it can launch anything late.
     return await Promise.race([
-      discover(socketPath, env, signal, coldLaunch),
+      discover(endpoint, socketPath, env, signal, coldLaunch),
       new Promise<never>((_resolve, reject) =>
         signal.addEventListener("abort", () => reject(signal.reason), { once: true }),
       ),
@@ -88,12 +112,13 @@ export async function resolveServiceSocket(options: ServiceSelection = {}): Prom
 }
 
 async function discover(
+  endpoint: Endpoint,
   socketPath: string,
   env: NodeJS.ProcessEnv,
   signal: AbortSignal,
   coldLaunch: () => void,
 ): Promise<string> {
-  const found = await probe(socketPath, signal);
+  const found = await probe(endpoint, socketPath, signal);
   if (found === "answering") return socketPath;
   signal.throwIfAborted();
   const bundle = env.YAP_APP ?? join(homedir(), "Applications", "Yap.app");
@@ -118,19 +143,20 @@ async function discover(
   await launch(bundle, personalHome(env), env.YAP_DEFAULTS, signal);
   while (true) {
     await delay(100, undefined, { signal });
-    if ((await probe(socketPath, signal)) === "answering") return socketPath;
+    if ((await probe(endpoint, socketPath, signal)) === "answering") return socketPath;
   }
 }
 
 /** "absent": nothing accepted the connection. "silent": something did, but gave no health answer. */
 async function probe(
+  endpoint: Endpoint,
   socketPath: string,
   signal: AbortSignal,
 ): Promise<"answering" | "absent" | "silent"> {
   try {
     await callLocal(
       socketPath,
-      { id: randomUUID(), operation: "service.health", params: {} },
+      { id: randomUUID(), operation: endpoint.probe, params: {} },
       { timeoutMs: 1_000, signal },
     );
     return "answering";
