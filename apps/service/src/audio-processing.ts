@@ -6,7 +6,8 @@ import { open, unlink, type FileHandle } from "node:fs/promises";
 import { join } from "node:path";
 import type { ProcessorImplementations } from "@yap/composition";
 import { CatalogError } from "@yap/core/catalog";
-import { fileIdentity, O_NOFOLLOW_ANY } from "@yap/core/files";
+import { fileIdentity } from "@yap/core/files";
+import { O_NOFOLLOW_ANY } from "@yap/core/open-flags";
 import { readAudioWave } from "@yap/core/audio-wave";
 import {
   normalizationGainDb,

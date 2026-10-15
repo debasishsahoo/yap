@@ -292,3 +292,120 @@ int main(int argc, char **argv) {
     rmSync(scratch, { recursive: true, force: true });
   }
 });
+
+test("yap mcp holds the installation lock only during a call, and leaves after an update", async (t) => {
+  const { bundleNodeEntry } = await import("./node-bundle.mjs");
+  const { readFileSync, realpathSync } = await import("node:fs");
+  const scratch = realpathSync(mkdtempSync(join(tmpdir(), "yap-mcp-lock-")));
+  const accountHome = join(scratch, "Account home");
+  mkdirSync(accountHome);
+  let server, holder;
+  t.after(() => {
+    server?.kill("SIGKILL");
+    holder?.kill("SIGKILL");
+    rmSync(scratch, { recursive: true, force: true });
+  });
+  const accountShim = join(scratch, "account.c");
+  writeFileSync(
+    accountShim,
+    `#include <pwd.h>
+struct passwd *fixture_getpwuid(uid_t uid) { static struct passwd account; account.pw_uid=uid; account.pw_dir=${JSON.stringify(accountHome)}; return &account; }
+`,
+  );
+  const launcher = join(scratch, "yap"),
+    lockExec = join(scratch, "lock-exec");
+  execFileSync("clang", [
+    "-Dgetpwuid=fixture_getpwuid",
+    "scripts/launcher/main.c",
+    accountShim,
+    "-o",
+    launcher,
+  ]);
+  execFileSync("clang", ["scripts/launcher-lab/lock-exec.c", "-o", lockExec]);
+  const app = join(scratch, "Yap.app");
+  mkdirSync(join(app, "Contents/Resources/node/bin"), { recursive: true });
+  mkdirSync(join(app, "Contents/Resources/service"), { recursive: true });
+  copyFileSync(process.execPath, join(app, "Contents/Resources/node/bin/node"));
+  bundleNodeEntry("apps/cli/dist/main.js", join(app, "Contents/Resources/cli/main.mjs"), {
+    stdio: "pipe",
+  });
+  const { version } = JSON.parse(readFileSync("apps/macos/package.json", "utf8"));
+  const installed = (value) =>
+    writeFileSync(
+      join(app, "Contents/Resources/service/runtime.json"),
+      JSON.stringify({ version: value }),
+    );
+  installed(version);
+  const lock = join(accountHome, "Library/Caches/com.dzhng.yap/launch.lock");
+  const exclusiveFree = () =>
+    spawnSync(lockExec, ["exclusive", lock, "/usr/bin/true"]).status === 0;
+
+  server = spawn(launcher, ["mcp"], {
+    env: { ...process.env, HOME: scratch, YAP_APP: app },
+    stdio: ["pipe", "pipe", "pipe"],
+  });
+  const closed = new Promise((resolve) => server.once("close", resolve));
+  let buffered = "";
+  const answers = new Map();
+  server.stdout.on("data", (chunk) => {
+    buffered += chunk;
+    let end;
+    while ((end = buffered.indexOf("\n")) >= 0) {
+      const message = JSON.parse(buffered.slice(0, end));
+      buffered = buffered.slice(end + 1);
+      answers.get(message.id)?.(message);
+    }
+  });
+  let nextId = 0;
+  const rpc = (method, params) => {
+    const id = ++nextId;
+    const answered = new Promise((resolve, reject) => {
+      const timer = setTimeout(() => reject(new Error(`${method} got no answer`)), 20_000);
+      answers.set(id, (message) => {
+        clearTimeout(timer);
+        resolve(message);
+      });
+    });
+    server.stdin.write(JSON.stringify({ jsonrpc: "2.0", id, method, params }) + "\n");
+    return answered;
+  };
+  const call = async () => {
+    const { result } = await rpc("tools/call", { name: "service.health", arguments: {} });
+    return JSON.parse(result.content[0].text);
+  };
+  await rpc("initialize", {
+    protocolVersion: "2025-06-18",
+    capabilities: {},
+    clientInfo: { name: "check", version: "1" },
+  });
+  server.stdin.write(
+    JSON.stringify({ jsonrpc: "2.0", method: "notifications/initialized" }) + "\n",
+  );
+
+  assert.ok(exclusiveFree(), "an idle MCP session must not hold the installation lock");
+
+  holder = spawn(lockExec, ["exclusive", lock, "/bin/cat"], { stdio: ["pipe", "pipe", "pipe"] });
+  await new Promise((resolve) => setTimeout(resolve, 200));
+  const during = await call();
+  assert.equal(during.error?.code, "UPDATING", JSON.stringify(during));
+  holder.kill("SIGKILL");
+  await new Promise((resolve) => holder.once("close", resolve));
+  holder = undefined;
+
+  const ordinary = await call();
+  assert.notEqual(ordinary.error?.code, "UPDATING", JSON.stringify(ordinary));
+  assert.equal(
+    server.exitCode,
+    null,
+    "the session stays up while the installed version is its own",
+  );
+
+  installed("999.0.0");
+  const last = await call();
+  assert.notEqual(last.error?.code, "UPDATING", JSON.stringify(last));
+  const code = await Promise.race([
+    closed,
+    new Promise((resolve) => setTimeout(() => resolve("still running"), 5_000)),
+  ]);
+  assert.equal(code, 0, "the session leaves after its call once a newer version is installed");
+});

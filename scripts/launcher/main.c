@@ -47,6 +47,12 @@ int main(int argc, char **argv) {
         if (errno == EWOULDBLOCK) return fail("UPDATING", "Installation is being replaced; retry after the update", 1, 75);
         return fail("SERVICE_UNAVAILABLE", "Cannot acquire installation lock", 0, 74);
     }
+    // A long-lived session (yap mcp) holds the lock only while it works, so it is told which
+    // descriptor carries this lifetime's lock and where to take it again.
+    char descriptor[32];
+    snprintf(descriptor, sizeof(descriptor), "%d", fd);
+    setenv("YAP_LAUNCH_LOCK_FD", descriptor, 1);
+    setenv("YAP_LAUNCH_LOCK", path, 1);
     // No access to the replaceable bundle occurs before shared exclusion is held.
     // Lookup order: $YAP_APP, then the home Applications copy if present, then the system one.
     const char *override = getenv("YAP_APP");

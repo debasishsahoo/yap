@@ -3,7 +3,8 @@ import { open, type FileHandle } from "node:fs/promises";
 import { join } from "node:path";
 import { isDeepStrictEqual } from "node:util";
 import { CatalogError } from "@yap/core/catalog";
-import { fileIdentity, hashFile, O_NOFOLLOW_ANY, type FileIdentity } from "@yap/core/files";
+import { fileIdentity, hashFile, type FileIdentity } from "@yap/core/files";
+import { O_NOFOLLOW_ANY } from "@yap/core/open-flags";
 import { withRenderAttempt, type RenderAttemptAuthority } from "./render.js";
 import { cliWorker, type MediaWorker } from "./worker.js";
 

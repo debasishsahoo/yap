@@ -5,7 +5,7 @@ import { setImmediate } from "node:timers/promises";
 import type { CaptureStore, Recording } from "./capture-store.js";
 import { CatalogError } from "./catalog.js";
 import type { DerivedCache } from "./cache.js";
-import { O_NOFOLLOW_ANY } from "./files.js";
+import { O_NOFOLLOW_ANY } from "./open-flags.js";
 
 type Category = "sourceBytes" | "evidenceBytes" | "cacheBytes" | "otherBytes" | "sharedBytes";
 export type StorageUsage = Record<Category | "totalBytes", number> & {

@@ -1,12 +1,7 @@
 import { constants, fstatSync, openSync } from "node:fs";
 import { CatalogError } from "@yap/core/catalog";
-import {
-  openedFile,
-  type OpenedFile,
-  type FileIdentity,
-  fileIdentity,
-  O_NOFOLLOW_ANY,
-} from "@yap/core/files";
+import { openedFile, type OpenedFile, type FileIdentity, fileIdentity } from "@yap/core/files";
+import { O_NOFOLLOW_ANY } from "@yap/core/open-flags";
 import { archiveLimits } from "@yap/core/package-archive";
 
 export type AdmittedArchive = OpenedFile &

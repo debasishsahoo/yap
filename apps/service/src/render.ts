@@ -3,7 +3,7 @@ import { copyFile, lstat, mkdir, mkdtemp, open, realpath } from "node:fs/promise
 import { basename, join } from "node:path";
 import type { DirectoryIdentity } from "@yap/core/cache";
 import { CatalogError } from "@yap/core/catalog";
-import { O_EXLOCK, O_SHLOCK, O_NOFOLLOW_ANY } from "@yap/core/files";
+import { O_EXLOCK, O_SHLOCK, O_NOFOLLOW_ANY } from "@yap/core/open-flags";
 import { nativeConfirmed, type MediaWorker } from "./worker.js";
 
 export type RenderAttemptAuthority = {

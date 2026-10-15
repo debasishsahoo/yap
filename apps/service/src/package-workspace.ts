@@ -5,7 +5,7 @@ import { constants } from "node:fs";
 import { open, mkdir, lstat, realpath, type FileHandle } from "node:fs/promises";
 import { join } from "node:path";
 import { CatalogError } from "@yap/core/catalog";
-import { O_NOFOLLOW_ANY } from "@yap/core/files";
+import { O_NOFOLLOW_ANY } from "@yap/core/open-flags";
 import { nativeConfirmed, nativeResult, type MediaWorker } from "./worker.js";
 
 type Identity = Readonly<{ dev: string; ino: string }>;

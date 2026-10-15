@@ -4,14 +4,8 @@ import { isDeepStrictEqual } from "node:util";
 import { readSync, closeSync, constants, fstatSync, openSync, type BigIntStats } from "node:fs";
 import { join } from "node:path";
 import { CatalogError } from "./catalog.js";
+import { O_NOFOLLOW_ANY, O_EXLOCK, O_SHLOCK } from "./open-flags.js";
 
-// Darwin sys/fcntl.h flags that Node does not export by name.
-/** Refuses a symlink in every path component, unlike O_NOFOLLOW which checks only the leaf. */
-export const O_NOFOLLOW_ANY = 0x20000000;
-/** Takes an exclusive flock as part of open; with O_NONBLOCK a held lock fails with EAGAIN. */
-export const O_EXLOCK = 0x20;
-/** Shared flock at open: live render attempts coexist but exclude whole-workspace cleanup. */
-export const O_SHLOCK = 0x10;
 /** The lock follows the inherited open-file description; parents may be canonical aliases,
  * but the selected directory itself must retain its admitted inode. Busy is left to its owner. */
 export async function openDirectoryLease(

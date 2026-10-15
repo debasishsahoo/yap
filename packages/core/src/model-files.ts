@@ -13,7 +13,8 @@ import {
 } from "node:fs/promises";
 import { dirname, isAbsolute, join, posix } from "node:path";
 import { CatalogError } from "./catalog.js";
-import { copyImportedFile, fileIdentity, hashFile, O_NOFOLLOW_ANY } from "./files.js";
+import { copyImportedFile, fileIdentity, hashFile } from "./files.js";
+import { O_NOFOLLOW_ANY } from "./open-flags.js";
 import type { RuntimeArtifact, RuntimeEntry, SpeechModelFile } from "./model-types.js";
 
 const mismatch = (path: string) =>

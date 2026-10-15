@@ -76,6 +76,10 @@
       "types": "./dist/files.d.ts",
       "default": "./dist/files.js"
     },
+    "./open-flags": {
+      "types": "./dist/open-flags.d.ts",
+      "default": "./dist/open-flags.js"
+    },
     "./index-read": {
       "types": "./dist/index-read.d.ts",
       "default": "./dist/index-read.js"

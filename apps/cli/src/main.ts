@@ -15,6 +15,7 @@ import {
 } from "./artifact-delivery.js";
 import { waitForWork, waitSucceeded } from "./wait.js";
 import { mcpContent, mcpInlineBytes, mcpResult } from "./mcp-result.js";
+import { sessionExclusion } from "./installation-lock.js";
 import { parseArgs } from "node:util";
 import { z } from "zod";
 import {
@@ -95,7 +96,7 @@ function errorResult(id: string, error: unknown): Extract<OperationResponse, { o
       id,
       error.code,
       error.message,
-      error.code === "TIMEOUT" || error.code.startsWith("CONNECTION_"),
+      error.code === "TIMEOUT" || error.code === "UPDATING" || error.code.startsWith("CONNECTION_"),
     );
   if (error instanceof FrameError)
     return failure(
@@ -171,6 +172,7 @@ async function readParams(value: string): Promise<unknown> {
 }
 
 async function mcp(selection: ServiceSelection) {
+  const exclusion = sessionExclusion(process.env, version);
   const server = new Server({ name: "yap", version }, { capabilities: { tools: {} } });
   server.setRequestHandler(ListToolsRequestSchema, async () => ({
     tools: capabilities().map((tool) => ({
@@ -180,7 +182,9 @@ async function mcp(selection: ServiceSelection) {
   }));
   server.setRequestHandler(CallToolRequestSchema, async (call, extra) => {
     const id = randomUUID();
+    let release: (() => void) | undefined;
     try {
+      release = exclusion.hold();
       const sending = request(id, call.params.name, call.params.arguments ?? {});
       const selected = {
         socketPath: await resolveServiceSocket({ ...selection, signal: extra.signal }),
@@ -192,6 +196,14 @@ async function mcp(selection: ServiceSelection) {
       );
     } catch (error) {
       return mcpContent(errorResult(id, error));
+    } finally {
+      if (release) {
+        const replaced = exclusion.replaced();
+        release();
+        // An updated app needs a session of its own version: leave once this answer is written,
+        // and the agent starts the new one.
+        if (replaced) setImmediate(() => process.stdout.write("", () => process.exit(0)));
+      }
     }
   });
   await server.connect(new StdioServerTransport());

@@ -2,7 +2,8 @@ import { createHash } from "node:crypto";
 import { open, realpath } from "node:fs/promises";
 import { constants } from "node:fs";
 import { isDeepStrictEqual } from "node:util";
-import { hashFile, O_NOFOLLOW_ANY } from "@yap/core/files";
+import { hashFile } from "@yap/core/files";
+import { O_NOFOLLOW_ANY } from "@yap/core/open-flags";
 import {
   hdrConversionOriginSchema,
   hdrConversionEvidenceMatchesMetadata,

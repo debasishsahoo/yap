@@ -13,11 +13,11 @@
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.30.0",
     "@yap/client": "workspace:*",
+    "@yap/core": "workspace:*",
     "@yap/protocol": "workspace:*",
     "zod": "4.6.5"
   },
   "devDependencies": {
-    "@yap/core": "workspace:*",
     "@yap/service": "workspace:*"
   }
 }

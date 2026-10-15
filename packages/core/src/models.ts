@@ -13,7 +13,7 @@ import {
 } from "node:fs";
 import { mkdir, open, rename, rm, realpath, type FileHandle } from "node:fs/promises";
 import { dirname, join, isAbsolute } from "node:path";
-import { O_NOFOLLOW_ANY } from "./files.js";
+import { O_NOFOLLOW_ANY } from "./open-flags.js";
 import { CatalogError } from "./catalog.js";
 import type {
   SpeechModelFile,

@@ -2,7 +2,7 @@ import { constants } from "node:fs";
 import { lstat, open, realpath, type FileHandle } from "node:fs/promises";
 import { CatalogError } from "@yap/core/catalog";
 import type { DirectoryIdentity } from "@yap/core/cache";
-import { O_EXLOCK, O_NOFOLLOW_ANY } from "@yap/core/files";
+import { O_EXLOCK, O_NOFOLLOW_ANY } from "@yap/core/open-flags";
 import { isPrivateDirectory } from "./managed-files.js";
 import { MAX_MEDIA_TIMEOUT_MS, nativeConfirmed, nativeResult, type MediaWorker } from "./worker.js";
 
