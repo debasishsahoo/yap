@@ -26,11 +26,12 @@ import { randomUUID } from "node:crypto";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
-import { Catalog } from "@yap/core/catalog";
+import { Catalog, CatalogError } from "@yap/core/catalog";
 import { AssetStore } from "@yap/core/assets";
 import { ProjectStore } from "@yap/core/projects";
 import { AcquisitionStore } from "@yap/core/acquisitions";
 import { TranscriptStore } from "@yap/core/transcript";
+import { ImportedTranscriptStore } from "@yap/core/imported-transcript";
 import { assetTranscriptOwner } from "@yap/core/transcript-processing";
 import { JobQueue } from "@yap/core/jobs";
 import { DerivedCache } from "@yap/core/cache";
@@ -87,6 +88,10 @@ export async function fixture(
     home,
     assetTranscriptOwner(assets, acquisitions),
   );
+  const importedTranscripts = new ImportedTranscriptStore(catalog, home, (source) => {
+    if (selectSource(assets, acquisitions, source).stream.kind !== "audio")
+      throw new CatalogError("UNSUPPORTED_MEDIA", "Imported transcript requires an audio stream");
+  });
   const projects = new ProjectStore(catalog, assets, transcriptRecords, acquisitions),
     cache = new DerivedCache(catalog, home, (owner) => {
       if (owner.kind === "asset") assets.get(owner.assetId);
@@ -336,6 +341,7 @@ export async function fixture(
     sceneRecords: scenes,
     scenes: sceneProcessing,
     transcriptRecords,
+    importedTranscripts,
     transcripts,
     speakerRecords,
     speakerLabels,
