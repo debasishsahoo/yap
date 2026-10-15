@@ -165,7 +165,7 @@ test("lost release acknowledgement restarts the service and lowers the native fe
  try? await Task.sleep(for: .milliseconds(70))
  owner.setEnabled(false); owner.cycleFinished(error:nil)
  for _ in 0..<300 { if trace.contains("restart") { break }; try? await Task.sleep(for: .milliseconds(10)) }
- guard !fenced, owner.status.error?.code != "UPDATE_RESTART_REQUIRED", !owner.cleanServiceExit else { print(owner.status, fenced); exit(1) }
+ guard !fenced, owner.status.error == nil, !owner.cleanServiceExit else { print(owner.status, fenced); exit(1) }
  print(trace.filter { $0 == "restart" }.joined())
  `,
       lost,

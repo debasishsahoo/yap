@@ -1,8 +1,8 @@
 # 02 Operations (done, uncommitted)
 
 **Contract.** `cli.status`, `cli.install`, `cli.uninstall` are public, synchronous,
-take `{}`, and are forwarded to the native control channel; with no app connected
-the service returns `CLI_UNAVAILABLE`.
+take `{}`, and are answered by the app on its own socket (`run/app.sock`); the
+service refuses them with a pointer to the app.
 
 **Seams.** `packages/protocol/src/operations.ts`, `apps/service/src/project-service.ts`.
 CLI help and MCP tools derive from `operationNames`.
