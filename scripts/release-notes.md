@@ -6,6 +6,15 @@ The capture menu keeps its dark appearance after selecting a recording area and
 shows the latest recording below the action buttons with Play and Copy agent prompt
 actions. Screen recordings now include the pointer in the captured video.
 
+## 0.1.47
+
+The Library and preview windows are redesigned. Library rows show what you need
+(when a project was made, a recording's length and state, an export's file)
+instead of identifiers; only items that need you stand out, in orange; click a
+row to open it; and projects can be copied as an agent prompt. Previews are
+titled by the project's name, with the revision you are watching clearly
+selected and Export beside it.
+
 ## 0.1.46
 
 You can screenshot and share the preview window again; it hides from capture only
