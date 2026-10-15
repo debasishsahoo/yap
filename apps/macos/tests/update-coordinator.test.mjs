@@ -342,3 +342,84 @@ test("a failed service cannot hold an update: it installs once native work is id
     ["install,authorize"],
   );
 });
+
+test("a service ended for an update is restarted when that update does not install", (t) => {
+  const silent = peer.replace(
+    "if (request.operation === 'update.prepare') permit = 'permit';",
+    "if (request.operation === 'update.prepare') return;",
+  );
+  assert.deepEqual(
+    run(
+      t,
+      `
+ owner.restartService = { trace.append("restart") }
+ blockers = []
+ owner.ready(install: { trace.append("install") }, cancel: { trace.append("cancel"); owner.cycleFinished(error: nil) })
+ try? await Task.sleep(for: .milliseconds(100))
+ blockers = ["native.capture"]
+ for _ in 0..<300 { if (try? await host.call("service.health")) == nil { break }; try? await Task.sleep(for: .milliseconds(10)) }
+ try? await Task.sleep(for: .milliseconds(100))
+ guard trace.isEmpty else { print("installed under a take", trace); exit(1) }
+ owner.setEnabled(false)
+ for _ in 0..<300 { if trace.contains("restart") { break }; try? await Task.sleep(for: .milliseconds(10)) }
+ print(trace.joined(separator:","))
+ `,
+      silent,
+    ),
+    ["cancel,restart"],
+  );
+});
+
+test("a service that exits uncleanly while closing for an install is restarted, never bypassed", (t) => {
+  const unclean = peer.replace(".on('close',()=>process.exit(0))", ".on('close',()=>process.exit(1))");
+  assert.deepEqual(
+    run(
+      t,
+      `
+ owner.restartService = { trace.append("restart") }
+ blockers = []
+ // As the app does: the host reports "closing for update" as unavailable, and that reaches the owner.
+ owner.ready(install: { trace.append("install"); owner.installing { trace.append("authorize") }; owner.serviceUnavailable() },
+             cancel: { trace.append("cancel"); owner.cycleFinished(error: nil) })
+ for _ in 0..<500 { if trace.contains("restart") { break }; try? await Task.sleep(for: .milliseconds(10)) }
+ try? await Task.sleep(for: .milliseconds(50))
+ guard !owner.mayTerminateForUpdate, !fenced else { print(owner.status, fenced); exit(1) }
+ owner.candidate(version: "3")
+ owner.ready(install: { trace.append("install-without-permit") }, cancel: { trace.append("cancel") })
+ try? await Task.sleep(for: .milliseconds(100))
+ print(trace.joined(separator:","))
+ `,
+      unclean,
+    ),
+    ["install,restart,cancel"],
+  );
+});
+
+test("refusals count only when consecutive from the same service", (t) => {
+  const refusing = peer.replace(
+    "if (request.operation === 'update.prepare') permit = 'permit';",
+    `if (request.operation === 'update.prepare') {
+ send({event:'result',response:{id:request.id,ok:false,error:{code:'INTERNAL',message:'admission broke'}}}); return;
+ }`,
+  );
+  assert.deepEqual(
+    run(
+      t,
+      `
+ blockers = []
+ for cycle in 1...3 {
+   if cycle == 3 { owner.attach(to: host) } // a fresh service starts its own count
+   owner.candidate(version: "2")
+   owner.ready(install: { trace.append("install") },
+               cancel: { trace.append("cancel"); owner.cycleFinished(error: nil) })
+   for _ in 0..<500 { if trace.count >= cycle { break }; try? await Task.sleep(for: .milliseconds(10)) }
+   try? await Task.sleep(for: .milliseconds(30))
+ }
+ do { _ = try await host.call("service.health") } catch { print("service ended"); exit(1) }
+ print(trace.joined(separator:","))
+ `,
+      refusing,
+    ),
+    ["cancel,cancel,cancel"],
+  );
+});

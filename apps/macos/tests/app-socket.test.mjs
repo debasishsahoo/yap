@@ -122,3 +122,19 @@ test("the app answers its own operations on its socket, framed like the service"
   await new Promise((resolve) => child.once("close", resolve));
   assert.equal(existsSync(path), false, "a stopped app removes its socket");
 });
+
+test("a first launch creates the socket's private directory, parents included", async (t) => {
+  const { scratch, executable } = build(t);
+  const path = join(scratch, "home/.yap/run/app.sock");
+  const { child, line } = await serve(t, executable, path);
+  assert.equal(line, "listening");
+  assert.deepEqual(await callLocal(path, { id: "e", operation: "update.status", params: {} }), {
+    id: "e",
+    ok: true,
+    data: { state: "idle" },
+  });
+  const { statSync } = await import("node:fs");
+  assert.equal(statSync(join(scratch, "home/.yap/run")).mode & 0o777, 0o700);
+  child.stdin.end();
+  await new Promise((resolve) => child.once("close", resolve));
+});

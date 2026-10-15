@@ -54,6 +54,9 @@ final class UpdateCoordinator {
     /// service, so this settles one the coordinator could not confirm, without asking anyone to
     /// quit and reopen the app.
     var restartService: (() -> Void)?
+    /// Ends `host` so the update can install without it, telling the rest of the app that the
+    /// service is gone; once it has exited, `serviceUnavailable` follows.
+    var endService: ((ServiceHost) -> Void)?
 
     var mayUpdate: Bool { enabled || manualCheck }
     var canStartManualCheck: Bool {
@@ -81,6 +84,7 @@ final class UpdateCoordinator {
     func attach(to host: ServiceHost) {
         self.host = host
         serviceFailed = false
+        refusedCycles = 0
         reported = nil
         publish()
         progress()
@@ -89,6 +93,8 @@ final class UpdateCoordinator {
     /// permit to grant. Waiting on one would hold back the very update that replaces the broken
     /// service; the update installs once native work (a take) is idle instead.
     func serviceUnavailable() {
+        // Closing the service is this coordinator's own step of an installation in progress.
+        guard phase != .closing, phase != .authorized else { return }
         host = nil
         serviceFailed = true
         progress()
@@ -195,6 +201,7 @@ final class UpdateCoordinator {
                 let data = try await host.call("update.prepare")
                 let answer = try JSONDecoder().decode(Preparation.self, from: data)
                 if answer.kind == "blocked" {
+                    refusedCycles = 0
                     guard generation == current else { return }
                     phase = .waiting
                     fence(false)
@@ -283,8 +290,9 @@ final class UpdateCoordinator {
         Task { @MainActor in
             do {
                 try await host.shutdownForUpdate()
+                guard generation == current else { return }
                 cleanServiceExit = true
-                guard generation == current, mayUpdate, phase == .closing else { return }
+                guard mayUpdate, phase == .closing else { return }
                 phase = .authorized
                 authorize()
             } catch {
@@ -329,6 +337,12 @@ final class UpdateCoordinator {
             phase = .waiting
             fence(false)
             status.blockers = []
+            // A service ended for this update, or one that failed, must not stay down because
+            // the update did not install.
+            if serviceFailed {
+                serviceFailed = false
+                restartService?()
+            }
             if let error {
                 fail(code: "UPDATE_FAILED", message: error.localizedDescription)
             } else {
@@ -346,6 +360,12 @@ final class UpdateCoordinator {
     private func stop(state: String) {
         generation = UUID()
         let old = phase
+        if old == .closing {
+            // The service was told to exit for this installation, which is not going ahead.
+            host = nil
+            serviceFailed = false
+            restartService?()
+        }
         phase = .cancelling
         status.state = state
         cancel?()
@@ -390,6 +410,10 @@ final class UpdateCoordinator {
         if self.host === host { self.host = nil }
         phase = .waiting
         fence(false)
+        if let endService {
+            endService(host)
+            return
+        }
         DispatchQueue.global(qos: .userInitiated).async {
             host.shutdown()
             DispatchQueue.main.async { MainActor.assumeIsolated { self.serviceUnavailable() } }

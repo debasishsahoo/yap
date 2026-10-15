@@ -23,6 +23,15 @@ final class AppSocket: @unchecked Sendable {
     }
 
     func start() throws(ServiceFailure) {
+        // A first launch can run before anything else has made the personal root.
+        let directory = (path as NSString).deletingLastPathComponent
+        do {
+            try FileManager.default.createDirectory(
+                atPath: directory, withIntermediateDirectories: true,
+                attributes: [.posixPermissions: 0o700])
+        } catch {
+            throw ServiceFailure(code: "SOCKET_UNAVAILABLE", message: "Could not create \(directory): \(error.localizedDescription)")
+        }
         try reclaimLeftover()
         var address = sockaddr_un()
         address.sun_family = sa_family_t(AF_UNIX)

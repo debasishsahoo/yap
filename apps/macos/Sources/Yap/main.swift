@@ -75,6 +75,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         changed: { [weak self] in self?.refreshUpdateControls() })
         self.updates = updates
         updates.restartService = { [weak self] in self?.restartService() }
+        updates.endService = { [weak self] host in self?.endService(host) }
         controls?.updateProgress = { [weak updates] in updates?.progress() }
         controller.updateProgress = { [weak updates] in updates?.progress() }
         sparkle = SparkleDriver(owner: updates, changed: { [weak self] in self?.refreshUpdateControls() }) { [weak self] in
@@ -177,7 +178,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// The app's own operations, answered on its socket so they work without the service.
     private func startAppSocket() {
         let runtime = (personalRoot() as NSString).appendingPathComponent("run")
-        mkdir(runtime, 0o700)
         // These operations carry no more than a flag; the bound only stops a runaway caller.
         let socket = AppSocket(path: (runtime as NSString).appendingPathComponent("app.sock"),
                                maxRequestBytes: 64 * 1024) { [weak self] operation, params, answer in
@@ -300,6 +300,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 MainActor.assumeIsolated {
                     guard !self.terminating else { return }
                     self.startService(capture: controller)
+                }
+            }
+        }
+    }
+
+    /// The updater ends a service that cannot take part in an installation. The rest of the app
+    /// learns it is gone once its process has exited, so the update never replaces a running one.
+    private func endService(_ host: ServiceHost) {
+        guard service === host else { return }
+        service = nil
+        serviceGeneration += 1
+        let generation = serviceGeneration
+        DispatchQueue.global(qos: .userInitiated).async {
+            host.shutdown()
+            DispatchQueue.main.async {
+                MainActor.assumeIsolated {
+                    guard self.serviceGeneration == generation, self.service == nil else { return }
+                    self.apply(.unavailable(code: "SERVICE_ENDED", message: "The service was stopped so an update can install."))
                 }
             }
         }
