@@ -14,6 +14,8 @@ final class PreviewWindow: NSObject, PreviewPresenting, NSWindowDelegate {
     private var onClose: (@MainActor () -> Void)?
     private var timelineBar: NSStackView?
     private var exportButton: NSButton?
+    /// Pushes Export to the right edge; kept with it when the timeline is rebuilt.
+    private var exportSpacer: NSView?
     /// The strip above the video, holding revision history and Export; hidden while empty.
     private static let barHeight: CGFloat = 36
     private var timelineActions: [ObjectIdentifier: @MainActor () -> Void] = [:]
@@ -38,7 +40,6 @@ final class PreviewWindow: NSObject, PreviewPresenting, NSWindowDelegate {
         self.onRetry = onRetry
         self.onClose = onClose
         // Recordings are usually 16:9; a window of that shape shows one without letterboxing.
-        // Yap's own captures leave out its windows by app, so people can still screenshot this one.
         let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 800, height: 450),
             styleMask: [.titled, .closable, .resizable, .miniaturizable], backing: .buffered, defer: false)
         window.isReleasedWhenClosed = false
@@ -67,13 +68,13 @@ final class PreviewWindow: NSObject, PreviewPresenting, NSWindowDelegate {
         container.addSubview(bar)
         timelineBar = bar
         let label = NSTextField(wrappingLabelWithString: "Preparing preview…")
-        label.frame = NSRect(x: 24, y: 220, width: 752, height: 60)
+        label.frame = NSRect(x: 24, y: 205, width: 752, height: 60)
         label.autoresizingMask = [.width, .minYMargin, .maxYMargin]
         label.alignment = .center
         label.textColor = .white
         view.addSubview(label)
         let button = NSButton(title: "Retry Preview", target: self, action: #selector(retryPreview))
-        button.frame = NSRect(x: 330, y: 180, width: 140, height: 32)
+        button.frame = NSRect(x: 330, y: 165, width: 140, height: 32)
         button.autoresizingMask = [.minXMargin, .maxXMargin, .minYMargin, .maxYMargin]
         button.isHidden = true
         view.addSubview(button)
@@ -102,7 +103,7 @@ final class PreviewWindow: NSObject, PreviewPresenting, NSWindowDelegate {
 
     func showTimeline(_ items: [PreviewTimelineItem], selected: String, select: @escaping @MainActor (String) -> Void) {
         guard let bar = timelineBar else { return }
-        for view in bar.arrangedSubviews where view !== exportButton {
+        for view in bar.arrangedSubviews where view !== exportButton && view !== exportSpacer {
             bar.removeArrangedSubview(view)
             view.removeFromSuperview()
         }
@@ -115,7 +116,7 @@ final class PreviewWindow: NSObject, PreviewPresenting, NSWindowDelegate {
             button.identifier = .init("timeline.\(item.id)")
             button.state = item.id == selected ? .on : .off
             timelineActions[ObjectIdentifier(button)] = { select(item.id) }
-            bar.insertArrangedSubview(button, at: bar.arrangedSubviews.count - (exportButton == nil ? 0 : 1))
+            bar.insertArrangedSubview(button, at: bar.arrangedSubviews.count - (exportButton == nil ? 0 : 2))
         }
         layoutBar()
     }
@@ -126,6 +127,7 @@ final class PreviewWindow: NSObject, PreviewPresenting, NSWindowDelegate {
         let spacer = NSView()
         spacer.setContentHuggingPriority(.init(1), for: .horizontal)
         bar.addArrangedSubview(spacer)
+        exportSpacer = spacer
         let button = NSButton(title: "Export", target: self, action: #selector(exportPreview(_:)))
         button.bezelStyle = .rounded
         button.controlSize = .small
@@ -239,6 +241,7 @@ final class PreviewWindow: NSObject, PreviewPresenting, NSWindowDelegate {
         onClose = nil
         timelineBar = nil
         exportButton = nil
+        exportSpacer = nil
         timelineActions.removeAll()
         exportAction = nil
     }

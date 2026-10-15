@@ -37,6 +37,11 @@ import YapControls
         let hit = document.hitTest(center)
         precondition(hit === play || hit?.isDescendant(of: play) == true,
                      "The row's own buttons stay above its click target")
+        // A click on the row's title, not just its gaps, opens it.
+        let titlePoint = document.convert(NSPoint(x: row.frame.minX + 110, y: row.frame.minY + 22), to: document.superview)
+        let onTitle = document.hitTest(titlePoint)
+        precondition(onTitle === row || onTitle?.isDescendant(of: row) == true,
+                     "Clicking a row's title opens it, not a text selection: \(String(describing: onTitle))")
         row.performClick(nil)
         precondition(actions.last == .playRecording("fixture-recording"), "Clicking a recording's row plays it")
         precondition(denied.control(identifier: "open.fixture-recording") == nil,

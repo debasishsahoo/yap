@@ -33,10 +33,16 @@ import AVKit
         precondition(player().frame.height >= content.bounds.height - 1, "The video fills the window")
         let video = player().frame
         precondition(abs(video.width / video.height - 16.0 / 9.0) < 0.02, "The video area is 16:9: \(video.size)")
+        // The controller offers Export before the revision history arrives.
+        preview.showExport {}
         preview.showTimeline([PreviewTimelineItem(id: "r1", ordinal: 0, label: "Revision 1", operation: "edit")],
             selected: "r1", select: { _ in })
         content.layoutSubtreeIfNeeded()
         guard let bar = bars().first else { preconditionFailure("Revision history shows a bar") }
+        bar.layoutSubtreeIfNeeded()
+        let export = descendants(bar).first { ($0 as? NSButton)?.title == "Export" }!
+        let exportFrame = export.convert(export.bounds, to: bar)
+        precondition(bar.bounds.maxX - exportFrame.maxX < 30, "Export stays at the right edge: \(exportFrame) in \(bar.bounds)")
         let barFrame = bar.convert(bar.bounds, to: content), videoFrame = player().convert(player().bounds, to: content)
         precondition(!barFrame.intersects(videoFrame), "The bar sits beside the video, never over it")
         // A display take leaves out this app's windows only if one was on screen when it began.

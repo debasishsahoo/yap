@@ -305,6 +305,8 @@ final class CaptureController {
         if let cameraAtStart = params["cameraAtStart"] { selection["cameraAtStart"] = cameraAtStart }
         let starting = Take(recordingId: recordingId, sourceId: sourceId, selection: selection)
         pendingStart = starting
+        // Before the stream starts: anything that must stay out of the take hears of it now.
+        updateProgress?()
         defer { releaseStart() }
         await startHold?.hold(recordingId: recordingId)
         try await capture.start(request)

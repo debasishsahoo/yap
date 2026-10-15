@@ -95,8 +95,8 @@ final class LibraryView: NSView, NSSearchFieldDelegate {
     }
 
     private func label(_ text: String, frame: NSRect, size: CGFloat, weight: NSFont.Weight = .regular,
-                       color: NSColor = .labelColor, in parent: NSView, wrap: Bool = false) {
-        let field = NSTextField(wrappingLabelWithString: text)
+                       color: NSColor = .labelColor, in parent: NSView, wrap: Bool = false, passive: Bool = false) {
+        let field = passive ? PassiveLabel(wrappingLabelWithString: text) : NSTextField(wrappingLabelWithString: text)
         field.font = .systemFont(ofSize: size, weight: weight)
         field.textColor = color
         field.frame = frame
@@ -185,7 +185,7 @@ final class LibraryView: NSView, NSSearchFieldDelegate {
             let details = row.details
             guard filter.isEmpty || ([row.title] + details).contains(where: { $0.localizedCaseInsensitiveContains(filter) }) else { continue }
             // Truthful fallback: a source/document symbol, never a generated media thumbnail.
-            let thumbnail = NSImageView(frame: NSRect(x: 22, y: y + 12, width: 88, height: 48))
+            let thumbnail = PassiveImage(frame: NSRect(x: 22, y: y + 12, width: 88, height: 48))
             thumbnail.wantsLayer = true
             thumbnail.layer?.backgroundColor = NSColor.controlBackgroundColor.cgColor
             thumbnail.layer?.cornerRadius = 7
@@ -194,20 +194,21 @@ final class LibraryView: NSView, NSSearchFieldDelegate {
             document.addSubview(thumbnail)
             let titleWidth = width - 214
             let titleLabelWidth = row.kind == .recording ? titleWidth - 100 : titleWidth - 68
-            label(row.title, frame: NSRect(x: 122, y: y + 13, width: titleLabelWidth, height: 20), size: 11, weight: .semibold, in: document)
+            let passive = row.open != nil
+            label(row.title, frame: NSRect(x: 122, y: y + 13, width: titleLabelWidth, height: 20), size: 11, weight: .semibold, in: document, passive: passive)
             if let status = row.status, row.kind != .recording {
-                label(status, frame: NSRect(x: width - 119, y: y + 17, width: 63, height: 42), size: 9, color: .secondaryLabelColor, in: document, wrap: true)
+                label(status, frame: NSRect(x: width - 119, y: y + 17, width: 63, height: 42), size: 9, color: .secondaryLabelColor, in: document, wrap: true, passive: passive)
             }
             var detailY = y + 39
             if let status = row.status, row.kind == .recording {
-                label(status, frame: NSRect(x: 122, y: detailY, width: titleWidth, height: 16), size: 11, color: .secondaryLabelColor, in: document)
+                label(status, frame: NSRect(x: 122, y: detailY, width: titleWidth, height: 16), size: 11, color: .secondaryLabelColor, in: document, passive: passive)
                 detailY += 19
             }
             for detail in details {
                 let font = NSFont.systemFont(ofSize: 11)
                 let rect = (detail as NSString).boundingRect(with: NSSize(width: titleWidth, height: .greatestFiniteMagnitude), options: [.usesLineFragmentOrigin], attributes: [.font: font])
                 let height = max(16, ceil(rect.height))
-                label(detail, frame: NSRect(x: 122, y: detailY, width: titleWidth, height: height), size: 11, color: .secondaryLabelColor, in: document, wrap: true)
+                label(detail, frame: NSRect(x: 122, y: detailY, width: titleWidth, height: height), size: 11, color: .secondaryLabelColor, in: document, wrap: true, passive: passive)
                 detailY += height + 3
             }
             let commands = row.actions
@@ -342,4 +343,13 @@ private final class LibraryTabButton: NSButton {
         }
         (title as NSString).draw(at: NSPoint(x: 35, y: 10), withAttributes: [.font: NSFont.systemFont(ofSize: 11, weight: selected ? .semibold : .regular), .foregroundColor: color])
     }
+}
+
+/// A row's text and picture are part of the row: a click on them reaches the row's open target
+/// beneath, instead of starting a text selection or stopping at the picture.
+private final class PassiveLabel: NSTextField {
+    override func hitTest(_ point: NSPoint) -> NSView? { nil }
+}
+private final class PassiveImage: NSImageView {
+    override func hitTest(_ point: NSPoint) -> NSView? { nil }
 }
