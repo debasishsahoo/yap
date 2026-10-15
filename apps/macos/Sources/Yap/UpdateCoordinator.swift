@@ -89,6 +89,7 @@ final class UpdateCoordinator {
     func attach(to host: ServiceHost) {
         self.host = host
         serviceFailed = false
+        endingService = false
         refusedCycles = 0
         reported = nil
         publish()
