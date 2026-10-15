@@ -1409,6 +1409,89 @@ test("selected-source transcript reads report unprepared models without download
   expect(requests.filter((operation) => operation === "speech.transcribe")).toEqual([]);
 });
 
+test("project transcript review reports a failed default model download as failed", async () => {
+  vi.stubGlobal("fetch", async () => {
+    throw new Error("offline");
+  });
+  cleanups.push(async () => vi.unstubAllGlobals());
+  const f = await setup(async (operation) => {
+    if (operation === "storage.clearRenderWorkspace") return { ok: true, data: { removed: true } };
+    return {
+      ok: true,
+      data: {
+        originUs: 0,
+        streams: [
+          {
+            id: "track:1",
+            kind: "audio",
+            codec: "pcm",
+            decodable: true,
+            startUs: 0,
+            endUs: 1000000,
+            segments: [{ startUs: 0, endUs: 1000000, empty: false }],
+          },
+        ],
+      },
+    };
+  });
+  const imported = await f.call("asset.import", { requestId: "speech", path: f.path });
+  if (!imported.ok) throw new Error(JSON.stringify(imported));
+  const ready = await f.job((imported.data as { jobId: string }).jobId, "ready");
+  const created = await f.call("project.create", {
+    requestId: "project",
+    canvas: {
+      width: 64,
+      height: 32,
+      fps: { numerator: 30, denominator: 1 },
+      background: "#000000ff",
+    },
+  });
+  if (!created.ok) throw new Error(JSON.stringify(created));
+  const { project, revision } = created.data as {
+    project: { projectId: string };
+    revision: { id: string };
+  };
+  const placed = await f.call("edit.apply", {
+    projectId: project.projectId,
+    requestId: "place",
+    expectedRevisionId: revision.id,
+    operations: [
+      { operation: "track.add", track: { kind: "audio", order: 0 }, label: "speech" },
+      {
+        operation: "place",
+        clip: {
+          trackId: { label: "speech" },
+          assetId: ready.published!.output.assetId,
+          streamId: "track:1",
+          source: { kind: "range", range: { startUs: 0, endUs: 1000000 } },
+          placement: { kind: "project", range: { startUs: 0, endUs: 1000000 } },
+        },
+      },
+    ],
+  });
+  if (!placed.ok) throw new Error(JSON.stringify(placed));
+  const review = {
+    projectId: project.projectId,
+    revisionId: (placed.data as { revision: { id: string } }).revision.id,
+  };
+  // The default model is fetched without asking; here the fetch fails.
+  expect(await f.call("transcript.review", review)).toMatchObject({
+    ok: true,
+    data: { state: "preparing" },
+  });
+  await expect
+    .poll(
+      async () =>
+        ((await f.call("model.status", { modelId: "parakeet" })) as { data?: { state?: string } })
+          .data?.state,
+    )
+    .toBe("failed");
+  expect(await f.call("transcript.review", review)).toMatchObject({
+    ok: true,
+    data: { state: "failed", model: { state: "failed" } },
+  });
+});
+
 test("project transcript paging uses shared jobs and returns an empty historical revision", async () => {
   const f = await setup(async (operation) => {
     if (operation === "storage.clearRenderWorkspace") return { ok: true, data: { removed: true } };

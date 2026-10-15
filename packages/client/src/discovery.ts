@@ -2,7 +2,7 @@ import { spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { stat } from "node:fs/promises";
 import { homedir } from "node:os";
-import { isAbsolute, join } from "node:path";
+import { dirname, isAbsolute, join } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import {
   DEFAULT_CALL_TIMEOUT_MS,
@@ -26,7 +26,10 @@ export const LAUNCH_BUDGET_MS = 60_000;
 const LAUNCHER = "/usr/bin/open";
 
 export type ServiceSelection = {
-  /** Explicit sockets bypass discovery and never launch the app. */
+  /**
+   * An explicit service socket bypasses discovery and never launches the app; the app's own
+   * operations use `app.sock` beside it.
+   */
   socketPath?: string | undefined;
   env?: NodeJS.ProcessEnv | undefined;
   signal?: AbortSignal | undefined;
@@ -62,7 +65,11 @@ export function resolveOperationSocket(
 }
 
 async function resolveEndpoint(endpoint: Endpoint, options: ServiceSelection): Promise<string> {
-  if (options.socketPath !== undefined) return options.socketPath;
+  // An explicit socket names the runtime directory; the app listens beside the service.
+  if (options.socketPath !== undefined)
+    return endpoint === service
+      ? options.socketPath
+      : endpoint.socketPath(dirname(options.socketPath));
   const env = options.env ?? process.env;
   const controller = new AbortController();
   const abort = () =>

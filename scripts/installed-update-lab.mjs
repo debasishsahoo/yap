@@ -374,43 +374,33 @@ try {
   save();
   await quit();
   preferences(true);
-  client = spawnOwned(launcher, ["mcp", "--socket", join(home, "run/service.sock")], {
-    cwd: "/",
-    env,
-    stdio: ["pipe", "pipe", "pipe"],
-  });
-  let clientOutput = "";
-  client.stdout.on("data", (bytes) => {
-    clientOutput += bytes;
-    writeFileSync(join(root, "mcp.log"), clientOutput);
-  });
+  // A running command holds the launcher's lock for its whole life (an idle `yap mcp` session
+  // does not). A bundled media tool reading stdin stays running until the lab ends it.
+  client = spawnOwned(
+    launcher,
+    [
+      "ffmpeg",
+      "-hide_banner",
+      "-f",
+      "s16le",
+      "-ar",
+      "8000",
+      "-ac",
+      "1",
+      "-i",
+      "pipe:0",
+      "-f",
+      "null",
+      "-",
+    ],
+    { cwd: "/", env, stdio: ["pipe", "pipe", "pipe"] },
+  );
   client.stderr.on("data", (bytes) =>
-    writeFileSync(join(root, "mcp-stderr.log"), bytes, { flag: "a" }),
+    writeFileSync(join(root, "held-cli-stderr.log"), bytes, { flag: "a" }),
   );
-  client.stdin.write(
-    JSON.stringify({
-      jsonrpc: "2.0",
-      id: 1,
-      method: "initialize",
-      params: {
-        protocolVersion: "2024-11-05",
-        capabilities: {},
-        clientInfo: { name: "installed-update-proof", version: "1" },
-      },
-    }) + "\n",
-  );
-  await wait(
-    () =>
-      clientOutput.split("\n").some((line) => {
-        try {
-          return JSON.parse(line).id === 1;
-        } catch {
-          return false;
-        }
-      }),
-    "MCP initialization",
-  );
-  trace("old-mcp-held", { pid: client.pid });
+  await delay(1000);
+  assert.equal(client.exitCode, null, "The lock-holding command must be running");
+  trace("old-cli-held", { pid: client.pid });
   launch();
   report.oldHealth = await health();
   const deferred = await wait(
@@ -454,7 +444,7 @@ try {
     /Launch lock is unavailable/,
     "A generic update failure does not prove launch-lock deferral",
   );
-  assert.equal(client.exitCode, null, "Old MCP must still hold its CLI lifetime");
+  assert.equal(client.exitCode, null, "The old command must still hold its CLI lifetime");
   assert.equal(client.signalCode, null);
   report.deferredLibrary = await observeLibrary(home, report.library, async (...args) =>
     cli(...args),
@@ -464,7 +454,7 @@ try {
   run("defaults", ["write", id, "SUEnableAutomaticChecks", "-bool", "false"]);
   await quit();
   client.stdin.end();
-  await wait(() => client.exitCode !== null || client.signalCode !== null, "old MCP exit");
+  await wait(() => client.exitCode !== null || client.signalCode !== null, "old command exit");
   launch();
   const disabled = await health("disabled");
   trace("persisted-off-relaunch", { health: disabled });

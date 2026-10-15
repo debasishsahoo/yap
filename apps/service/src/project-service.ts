@@ -2201,7 +2201,12 @@ export async function startProjectService(options: {
                   ok: true,
                   data: {
                     ...requested,
-                    state: model.state === "ready" ? "not_ready" : "preparing",
+                    state:
+                      model.state === "ready"
+                        ? "not_ready"
+                        : model.state === "failed"
+                          ? "failed"
+                          : "preparing",
                     model,
                     page: null,
                   },

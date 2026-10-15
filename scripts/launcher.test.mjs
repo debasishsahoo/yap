@@ -296,7 +296,8 @@ int main(int argc, char **argv) {
 test("yap mcp holds the installation lock only during a call, and leaves after an update", async (t) => {
   const { bundleNodeEntry } = await import("./node-bundle.mjs");
   const { readFileSync, realpathSync } = await import("node:fs");
-  const scratch = realpathSync(mkdtempSync(join(tmpdir(), "yap-mcp-lock-")));
+  // Short as well as real: a fake service socket lives under this home.
+  const scratch = realpathSync(mkdtempSync("/tmp/yap-mcp-lock-"));
   const accountHome = join(scratch, "Account home");
   mkdirSync(accountHome);
   let server, holder;
@@ -369,8 +370,8 @@ struct passwd *fixture_getpwuid(uid_t uid) { static struct passwd account; accou
     server.stdin.write(JSON.stringify({ jsonrpc: "2.0", id, method, params }) + "\n");
     return answered;
   };
-  const call = async () => {
-    const { result } = await rpc("tools/call", { name: "service.health", arguments: {} });
+  const call = async (name = "service.health") => {
+    const { result } = await rpc("tools/call", { name, arguments: {} });
     return JSON.parse(result.content[0].text);
   };
   await rpc("initialize", {
@@ -400,9 +401,39 @@ struct passwd *fixture_getpwuid(uid_t uid) { static struct passwd account; accou
     "the session stays up while the installed version is its own",
   );
 
+  // A service whose recording.list answers slowly, so one call is still running when another
+  // finds the newer version.
+  const { createServer } = await import("node:net");
+  mkdirSync(join(scratch, ".yap/run"), { recursive: true, mode: 0o700 });
+  const service = createServer((socket) => {
+    let buffered = "";
+    socket.on("data", (chunk) => {
+      buffered += chunk;
+      const end = buffered.indexOf("\n");
+      if (end < 0) return;
+      const request = JSON.parse(buffered.slice(0, end));
+      const reply = () =>
+        socket.end(
+          JSON.stringify({ id: request.id, ok: true, data: { operation: request.operation } }) +
+            "\n",
+        );
+      if (request.operation === "recording.list") setTimeout(reply, 1500);
+      else reply();
+    });
+  });
+  await new Promise((resolve) => service.listen(join(scratch, ".yap/run/service.sock"), resolve));
+  t.after(() => service.close());
+
   installed("999.0.0");
-  const last = await call();
-  assert.notEqual(last.error?.code, "UPDATING", JSON.stringify(last));
+  const slow = call("recording.list");
+  await new Promise((resolve) => setTimeout(resolve, 300));
+  const fast = await call();
+  assert.equal(fast.ok, true, JSON.stringify(fast));
+  assert.deepEqual(await slow, {
+    id: (await slow).id,
+    ok: true,
+    data: { operation: "recording.list" },
+  });
   const code = await Promise.race([
     closed,
     new Promise((resolve) => setTimeout(() => resolve("still running"), 5_000)),

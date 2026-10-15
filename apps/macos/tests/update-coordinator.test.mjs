@@ -371,7 +371,10 @@ test("a service ended for an update is restarted when that update does not insta
 });
 
 test("a service that exits uncleanly while closing for an install is restarted, never bypassed", (t) => {
-  const unclean = peer.replace(".on('close',()=>process.exit(0))", ".on('close',()=>process.exit(1))");
+  const unclean = peer.replace(
+    ".on('close',()=>process.exit(0))",
+    ".on('close',()=>process.exit(1))",
+  );
   assert.deepEqual(
     run(
       t,

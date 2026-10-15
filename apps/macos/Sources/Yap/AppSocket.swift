@@ -49,6 +49,9 @@ final class AppSocket: @unchecked Sendable {
         // its answer is written can never raise SIGPIPE, however quickly it leaves.
         var noSignal: Int32 = 1
         setsockopt(listener, SOL_SOCKET, SO_NOSIGPIPE, &noSignal, socklen_t(MemoryLayout<Int32>.size))
+        // A caller that stops reading cannot hold a writer past this.
+        var sendDeadline = timeval(tv_sec: 5, tv_usec: 0)
+        setsockopt(listener, SOL_SOCKET, SO_SNDTIMEO, &sendDeadline, socklen_t(MemoryLayout<timeval>.size))
         let length = socklen_t(MemoryLayout<sockaddr_un>.size)
         let result = withUnsafePointer(to: &address) {
             $0.withMemoryRebound(to: sockaddr.self, capacity: 1) { bind(listener, $0, length) }
@@ -126,7 +129,8 @@ final class AppSocket: @unchecked Sendable {
                 respond(client, id: "app", .failure(ServiceFailure(code: "INVALID_REQUEST", message: "Expected a request with id, operation and params")))
                 return
             }
-            handle(operation, encoded) { [self] result in respond(client, id: id, result) }
+            // The handler answers on the main actor; the reply is written here, off it.
+            handle(operation, encoded) { [self] result in queue.async { self.respond(client, id: id, result) } }
         }
     }
 

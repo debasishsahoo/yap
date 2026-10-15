@@ -173,6 +173,10 @@ async function readParams(value: string): Promise<unknown> {
 
 async function mcp(selection: ServiceSelection) {
   const exclusion = sessionExclusion(process.env, version);
+  // An updated app needs a session of its own version. Once one call finds it, the session
+  // leaves after every call still running has its answer, and the agent starts the new one.
+  let running = 0;
+  let leaving = false;
   const server = new Server({ name: "yap", version }, { capabilities: { tools: {} } });
   server.setRequestHandler(ListToolsRequestSchema, async () => ({
     tools: capabilities().map((tool) => ({
@@ -183,6 +187,7 @@ async function mcp(selection: ServiceSelection) {
   server.setRequestHandler(CallToolRequestSchema, async (call, extra) => {
     const id = randomUUID();
     let release: (() => void) | undefined;
+    running += 1;
     try {
       release = exclusion.hold();
       const sending = request(id, call.params.name, call.params.arguments ?? {});
@@ -201,12 +206,15 @@ async function mcp(selection: ServiceSelection) {
       return mcpContent(errorResult(id, error));
     } finally {
       if (release) {
-        const replaced = exclusion.replaced();
+        leaving ||= exclusion.replaced();
         release();
-        // An updated app needs a session of its own version: leave once this answer is written,
-        // and the agent starts the new one.
-        if (replaced) setImmediate(() => process.stdout.write("", () => process.exit(0)));
       }
+      running -= 1;
+      // This answer is written before the next turn; leave once no other call is still running.
+      if (leaving && running === 0)
+        setImmediate(() => {
+          if (running === 0) process.stdout.write("", () => process.exit(0));
+        });
     }
   });
   await server.connect(new StdioServerTransport());

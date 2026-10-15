@@ -250,7 +250,7 @@ final class ServiceHost: @unchecked Sendable {
                     guard let answer = self.updateExit else { return }
                     self.updateExit = nil
                     answer(.failure(ServiceFailure(code: "UPDATE_SHUTDOWN_TIMEOUT",
-                        message: "Service did not exit cleanly. Quit and reopen the app to restore service.")))
+                        message: "Service did not exit cleanly for the update; the app restarts it.")))
                 }
             }
         }

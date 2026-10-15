@@ -61,8 +61,8 @@ exclusion permits clean service EOF, and observed clean exit permits replacement
 An authenticated check that finds no newer version completes normally; a fresh
 check clears prior check errors and candidate facts. Released apps check hourly,
 so a cycle that fails is retried within the hour.
-Updater shutdown never finalizes capture, closes preview or sends a signal to
-manufacture idle. The update is how a broken service gets fixed, so no service
+Updater shutdown never finalizes capture or closes preview to manufacture idle; it
+signals only a service that cannot take part. The update is how a broken service gets fixed, so no service
 failure may hold it: a service that fails to start, cannot answer the permit
 request or refuses it three cycles running is ended, and the update installs once
 native work is idle. A release the app cannot confirm, or an installation that
@@ -132,8 +132,8 @@ while the SDK is busy or a restart is required. Completion, progress and failure
 remain visible in Settings.
 
 The UI and CLI use the same public updater operations and native SDK boundary.
-Settings calls that boundary locally, so opt-out remains usable when the child
-service fails or is closing; the CLI forwards through its service connection.
+Settings calls that boundary locally and the CLI reaches it on the app's own
+socket, so both keep working when the child service fails or is closing.
 Sparkle owns scheduling, preference persistence and staged-update cancellation;
 the coordinator owns installation admission for both scheduled and one-shot
 checks. Neither surface bypasses recording, service or launcher exclusion.

@@ -467,3 +467,12 @@ function deferred(): { promise: Promise<void>; resolve: () => void } {
   });
   return { promise, resolve: () => release() };
 }
+
+it("an explicit socket names where the service listens; the app's operations go beside it", async () => {
+  const { resolveOperationSocket } = await import("./discovery.js");
+  const explicit = "/scratch/home/run/service.sock";
+  expect(await resolveOperationSocket("recording.list", { socketPath: explicit })).toBe(explicit);
+  expect(await resolveOperationSocket("update.status", { socketPath: explicit })).toBe(
+    "/scratch/home/run/app.sock",
+  );
+});

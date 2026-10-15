@@ -1,7 +1,8 @@
 import Foundation
 
 /// Joins existing native intent to the service's atomic permit. Sparkle owns the
-/// update cycle and launch exclusion; this owner never closes resources to obtain idle.
+/// update cycle and launch exclusion. This owner never closes resources to obtain idle;
+/// it ends or restarts only a service that cannot answer for its own work.
 @MainActor
 final class UpdateCoordinator {
     struct Status: Equatable {
