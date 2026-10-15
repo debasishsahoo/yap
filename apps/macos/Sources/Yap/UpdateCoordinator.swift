@@ -46,6 +46,7 @@ final class UpdateCoordinator {
     private(set) var available = false
     private(set) var enabled = false
     private(set) var cleanServiceExit = false
+    private var serviceFailed = false
     private(set) var checkMessage: String?
     var preferenceChanged: ((Bool) -> Void)?
 
@@ -77,8 +78,17 @@ final class UpdateCoordinator {
     }
     func attach(to host: ServiceHost) {
         self.host = host
+        serviceFailed = false
         reported = nil
         publish()
+        progress()
+    }
+    /// A failed service has already ended its process, so it has no work left to protect and no
+    /// permit to grant. Waiting on one would hold back the very update that replaces the broken
+    /// service; the update installs once native work (a take) is idle instead.
+    func serviceUnavailable() {
+        host = nil
+        serviceFailed = true
         progress()
     }
     func setAvailability(_ available: Bool, enabled: Bool) {
@@ -156,7 +166,17 @@ final class UpdateCoordinator {
         status.blockers = nativeBlockers()
         status.state = "waiting"
         publish()
-        guard status.blockers.isEmpty, let host else { return }
+        guard status.blockers.isEmpty else { return }
+        if serviceFailed {
+            phase = .committed
+            fence(true)
+            status.blockers = ["launcher"]
+            publish()
+            installerRequested = true
+            install?()
+            return
+        }
+        guard let host else { return }
         phase = .preparing
         fence(true)
         let current = generation
@@ -233,6 +253,19 @@ final class UpdateCoordinator {
     /// Its retained retry callback grants final replacement after actual clean EOF.
     func installing(authorize: @escaping () -> Void) {
         guard phase == .committed else { return }
+        if serviceFailed {
+            guard mayUpdate, nativeBlockers().isEmpty else {
+                stop(state: "failed")
+                return
+            }
+            cleanServiceExit = true
+            phase = .authorized
+            status.state = "installing"
+            status.blockers = []
+            publish()
+            authorize()
+            return
+        }
         guard mayUpdate, permit != nil,
             nativeBlockers().isEmpty, let host
         else {

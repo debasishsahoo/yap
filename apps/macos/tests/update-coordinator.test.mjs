@@ -249,3 +249,22 @@ test("SDK failure before EOF releases service admission without claiming install
     ["old-service-usable"],
   );
 });
+test("a failed service cannot hold an update: it installs once native work is idle", (t) => {
+  assert.deepEqual(
+    run(
+      t,
+      `
+ owner.serviceUnavailable()
+ owner.ready(install: { trace.append("install"); owner.installing { trace.append("authorize") } },
+             cancel: { trace.append("cancel") })
+ try? await Task.sleep(for: .milliseconds(30))
+ guard trace.isEmpty, !fenced, owner.status.state == "waiting" else { print(owner.status); exit(1) }
+ blockers = []; owner.progress()
+ for _ in 0..<200 { if owner.mayTerminateForUpdate { break }; try? await Task.sleep(for: .milliseconds(10)) }
+ guard owner.mayTerminateForUpdate, fenced else { print(owner.status); exit(1) }
+ print(trace.joined(separator:","))
+ `,
+    ),
+    ["install,authorize"],
+  );
+});

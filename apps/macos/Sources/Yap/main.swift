@@ -282,6 +282,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
         case .unavailable(let code, let message):
             diagnostic("service failed code=\(code) message=\(message)")
+            updates?.serviceUnavailable()
             // No library is listening any more, so the take is finished into its own journal and
             // left for the next service to reconcile rather than captured unindexed.
             if let controller, controller.isCapturing {
