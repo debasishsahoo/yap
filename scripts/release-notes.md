@@ -6,6 +6,14 @@ The capture menu keeps its dark appearance after selecting a recording area and
 shows the latest recording below the action buttons with Play and Copy agent prompt
 actions. Screen recordings now include the pointer in the captured video.
 
+## 0.1.42
+
+Fixes Yap showing its service as unavailable, with an empty Library, in 0.1.40
+and 0.1.41. A bundled skill helper read the app's control channel at startup,
+so the service never finished starting. Recordings were never affected; they
+appear again once the app updates. A new check starts the shipped service the
+way the app does before a release can publish.
+
 ## 0.1.41
 
 The bundled yap skill now checks the feed preview frame before delivering a
