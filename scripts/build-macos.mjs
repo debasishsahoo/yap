@@ -6,6 +6,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { bundleFacts, verifiedFramework } from "./release-info.mjs";
 import { releaseSigningInputs, signReleaseTree } from "./release-signing.mjs";
 import { findIdentity } from "./signing-identity.mjs";
+import { bundleNodeEntry } from "./node-bundle.mjs";
 import { bundleSkillsInstaller } from "./skills-installer.mjs";
 import { stageFFmpeg, verifyFFmpeg } from "../helpers/ffmpeg/prepare.mjs";
 
@@ -66,8 +67,6 @@ mkdirSync(rnnoiseNotices, { recursive: true });
 for (const file of ["COPYING", "provenance.json"])
   copyFileSync(join(root, "helpers/denoise", file), join(rnnoiseNotices, file));
 
-// The bundled service and CLI run outside the checkout with no node_modules in reach, so
-// each ships as one file with Node builtins left external.
 const service = join(app, "Contents/Resources/service");
 const skill = join(app, "Contents/Resources/skill");
 rmSync(skill, { recursive: true, force: true });
@@ -84,15 +83,8 @@ await stageFFmpeg({
     signedResources.push(file);
   },
 });
-for (const [entry, outfile] of [
-  ["apps/service/dist/main.js", join(service, "main.mjs")],
-  ["apps/cli/dist/main.js", join(app, "Contents/Resources/cli/main.mjs")],
-]) {
-  mkdirSync(dirname(outfile), { recursive: true });
-  execFileSync("bun", ["build", join(root, entry), "--target=node", "--outfile", outfile], {
-    stdio: "inherit",
-  });
-}
+bundleNodeEntry(join(root, "apps/service/dist/main.js"), join(service, "main.mjs"));
+bundleNodeEntry(join(root, "apps/cli/dist/main.js"), join(app, "Contents/Resources/cli/main.mjs"));
 
 // The app reads its control-channel limits from here rather than restating them in
 // Swift, so protocol stays their one owner. The interpreter is a personal-host

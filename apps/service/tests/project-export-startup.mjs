@@ -1,11 +1,13 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { randomUUID, createHash } from "node:crypto";
-import { spawn, spawnSync } from "node:child_process";
+import { spawn } from "node:child_process";
 import { once } from "node:events";
+import { realpathSync } from "node:fs";
 import { mkdtemp, readFile, rename, rm } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { callLocal } from "@yap/client";
+import { bundleNodeEntry } from "../../../scripts/node-bundle.mjs";
 import { nativePictureCapabilities, projectMovieRenderer } from "../dist/project-render.js";
 import { fixture, until, native, nativeBinary } from "./fixtures/project-export.mjs";
 
@@ -49,16 +51,12 @@ test(
     assert.equal(pending.state, "queued");
     assert.equal(f.jobs.job(pending.jobId).state, "waiting");
     await f.close();
-    const home = await mkdtemp("/tmp/yap-bundled-export-");
+    // A real path, as installed: through the /tmp symlink a bundled module can pass by accident.
+    const home = realpathSync(await mkdtemp("/tmp/yap-bundled-export-"));
     t.after(() => rm(home, { recursive: true, force: true }));
     await rename(f.home, join(home, "library"));
     const bundle = join(home, "service.mjs");
-    const built = spawnSync(
-      "bun",
-      ["build", resolve("apps/service/dist/main.js"), "--target=node", "--outfile", bundle],
-      { encoding: "utf8" },
-    );
-    assert.equal(built.status, 0, built.stdout + built.stderr);
+    bundleNodeEntry(resolve("apps/service/dist/main.js"), bundle, { stdio: "pipe" });
     const child = spawn(process.execPath, [bundle], {
       cwd: "/",
       detached: true,

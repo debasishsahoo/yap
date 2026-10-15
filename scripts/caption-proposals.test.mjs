@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { captionProposals } from "../skills/yap/scripts/caption-proposals.mjs";
+import { bundleNodeEntry } from "./node-bundle.mjs";
 
 const word = (ordinal, text, startUs, endUs, extra = {}) => ({
   type: "word",
@@ -451,7 +452,7 @@ test("highlight runs preserve fragmented support and repeated occurrence identit
 });
 
 test("a program that bundles the helper keeps its own stdin", async () => {
-  const { spawn, execFileSync } = await import("node:child_process");
+  const { spawn } = await import("node:child_process");
   const { mkdtempSync, realpathSync, writeFileSync } = await import("node:fs");
   const { tmpdir } = await import("node:os");
   const { join, resolve } = await import("node:path");
@@ -462,10 +463,7 @@ test("a program that bundles the helper keeps its own stdin", async () => {
     join(directory, "entry.mjs"),
     `import { captionProposals } from ${JSON.stringify(helper)};\nconsole.log(typeof captionProposals);\n`,
   );
-  execFileSync("bun", ["build", "entry.mjs", "--target=node", "--outfile=main.mjs"], {
-    cwd: directory,
-    stdio: "pipe",
-  });
+  bundleNodeEntry(join(directory, "entry.mjs"), join(directory, "main.mjs"), { stdio: "pipe" });
   // The service's control channel stays open; a helper that waits for its end never returns.
   const child = spawn(process.execPath, [join(directory, "main.mjs")], { stdio: "pipe" });
   let stdout = "";
