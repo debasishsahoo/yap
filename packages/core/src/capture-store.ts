@@ -358,10 +358,15 @@ export class CaptureStore extends Catalog {
    * Every take that can still change state, oldest first. A relaunched service reconciles these
    * against their own durable media; nothing else may be left describing a capture that ended.
    */
+  /**
+   * Whether a take is still changing. One whose recovery failed waits for an explicit retry
+   * (`capture.stop`), which can wait for an update, so it does not hold one back. A finalizing
+   * take without a failure stores the JSON text `null`.
+   */
   get updateBlocked(): boolean {
     return !!this.catalog
       .prepare(
-        `SELECT 1 FROM recordings WHERE state IN (${unsettledStates.map(() => "?").join(",")}) LIMIT 1`,
+        `SELECT 1 FROM recordings WHERE state IN (${unsettledStates.map(() => "?").join(",")}) AND (finalizationError IS NULL OR finalizationError = 'null') LIMIT 1`,
       )
       .get(...unsettledStates);
   }

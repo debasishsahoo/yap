@@ -773,3 +773,27 @@ test("the catalog stays at the format 0.1.33 libraries use, so their recordings 
   expect(catalogFormat).toBe(29);
   expect(minimumSupportedCatalogFormat).toBe(catalogFormat);
 });
+
+test("a take whose recovery failed stops holding back an update; a take still in progress holds it", () => {
+  const { store } = fixture();
+  const { recordingId, sourceId } = store.allocate({
+    requestId: "stranded",
+    arguments: "screen",
+  }).recording;
+  store.ingestLifecycle(recordingId, { sourceId, sequence: 1, state: "recording" });
+  expect(store.updateBlocked).toBe(true);
+  store.ingestLifecycle(recordingId, { sourceId, sequence: 2, state: "finalizing" });
+  expect(store.updateBlocked).toBe(true);
+  // Recovery gave up: the take waits for an explicit retry, which an update must not wait on.
+  store.ingestLifecycle(recordingId, {
+    sourceId,
+    sequence: 3,
+    state: "finalizing",
+    finalizationError: {
+      code: "CAPTURE_RECOVERY_UNRESOLVED",
+      message: "Recovered media could not be reconciled",
+      retryable: true,
+    },
+  });
+  expect(store.updateBlocked).toBe(false);
+});
