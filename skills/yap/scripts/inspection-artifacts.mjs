@@ -1,5 +1,7 @@
-import { constants } from "node:fs";
+import { constants, realpathSync } from "node:fs";
 import { open } from "node:fs/promises";
+import { basename } from "node:path";
+import { fileURLToPath } from "node:url";
 import { createCli } from "./yap-cli.mjs";
 
 export const failure = (code, message) => Object.assign(new Error(message), { code });
@@ -49,6 +51,20 @@ export async function readTaskFile(path, maxBytes) {
     return result;
   } finally {
     await file.close();
+  }
+}
+/**
+ * Whether this process was launched as the named helper file. A program that bundles a helper
+ * shares its module URL with the bundle, so the launched file must also carry the helper's own
+ * name; otherwise the helper would read the bundling program's stdin as its request.
+ */
+export function launchedAs(moduleUrl, name) {
+  if (!process.argv[1]) return false;
+  try {
+    const launched = realpathSync(process.argv[1]);
+    return basename(launched) === name && launched === realpathSync(fileURLToPath(moduleUrl));
+  } catch {
+    return false;
   }
 }
 export async function runJsonHelper(helper) {

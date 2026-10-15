@@ -1,5 +1,4 @@
-import { pathToFileURL } from "node:url";
-import { budget, failure, runJsonHelper } from "./inspection-artifacts.mjs";
+import { budget, failure, launchedAs, runJsonHelper } from "./inspection-artifacts.mjs";
 
 const nonempty = (value) => typeof value === "string" && value.length > 0;
 const positiveInteger = (value) => Number.isSafeInteger(value) && value > 0;
@@ -159,7 +158,7 @@ export function dialogueProposals(request) {
   };
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+if (launchedAs(import.meta.url, "dialogue-proposals.mjs")) {
   if (process.argv.includes("--help"))
     console.log(
       "Usage: node dialogue-proposals.mjs < request.json\nSupply projectId/revisionId, targetIntegratedLufs, gainBounds {minimumDb,maximumDb}, truePeakCeilingDbtp, minimumDurationUs and clips [{clipId,evidence}]. Evidence is delivered audio.measure JSON for a processed clip tap, with measurement at root. Returns exact evidence pins, measured-selection predictions and an ID-free new gainStep draft, with gain-constrained issues when the peak ceiling or gain bounds limited it (the ceiling wins), or status unavailable with a proposal-unavailable issue (missing support, too short, unmeasurable, unrepresentable gain). Append explicitly to the existing ordered stack through processing.set; remeasure. Never calls CLI, infers or edits.",

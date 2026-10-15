@@ -1,5 +1,4 @@
-import { pathToFileURL } from "node:url";
-import { boundedIssues, budget, failure, runJsonHelper } from "./inspection-artifacts.mjs";
+import { boundedIssues, budget, failure, launchedAs, runJsonHelper } from "./inspection-artifacts.mjs";
 
 const graphemes = new Intl.Segmenter("und", { granularity: "grapheme" });
 const length = (text) => [...graphemes.segment(text)].length;
@@ -445,7 +444,7 @@ export function captionProposals(request) {
   return output;
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+if (launchedAs(import.meta.url, "caption-proposals.mjs")) {
   if (process.argv.includes("--help"))
     console.log(
       "Usage: node caption-proposals.mjs < request.json\nPure caption drafts from one complete pinned compact-transcript entry, explicit rowIndexes/corrections, caption track, canvas, text style and constraints. Constraints: widthGraphemes, maxLines, minDwellUs/maxDwellUs, maxCps, pauseUs, breakOnPunctuation, separator, safeArea {x,y,width,height}; optional maxBytes. Returns ordinary text clip/geometry drafts and exact word pins/fragments, with Yap issues at two levels: the output's issues (unsupported constraints, cues split at the 1000-word seed pin limit) and each proposal's (caption-constraint-unmet naming the request key with requested/measured values, wrapping off, empty or over-long text, instant, partial or discontinuous words), each list bounded at 1000. A source-only entry refuses INVALID_REQUEST; an incomplete or unready one refuses NOT_READY. Explicit style.highlight {activeColor,inactiveColor} emits corrected display UTF16 timedWords mapped to retained source fragments; empty corrections have no run. Instant points retain evidence with clip:null and caption-instant-word. Never calls CLI, transcribes or applies edits. Drafts are never pixel-checked: glyph fit, clipping and legibility need explicit application and actual frame.get inspection.",

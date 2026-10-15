@@ -1,6 +1,5 @@
-import { pathToFileURL } from "node:url";
 import { createHash } from "node:crypto";
-import { runJsonHelper } from "./inspection-artifacts.mjs";
+import { launchedAs, runJsonHelper } from "./inspection-artifacts.mjs";
 
 const displayTime = (value) =>
   (typeof value === "number" ? value : value.numerator / value.denominator) / 1_000_000;
@@ -241,7 +240,7 @@ export async function compactTranscripts(request, invoke) {
   return result;
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+if (launchedAs(import.meta.url, "compact-transcripts.mjs")) {
   if (process.argv.includes("--help")) {
     console.log(
       "Usage: node compact-transcripts.mjs < request.json\nRead-only transcript.get helper. Supply selections (assetId/streamId/acquisitionId or projectId/revisionId), optional labels/generation, maxBytes, maxPages, pageRows, pauseUs, continuation and cli options. Exact rows are edit evidence; phrase seconds are display only.",

@@ -449,3 +449,51 @@ test("highlight runs preserve fragmented support and repeated occurrence identit
     { range: [0, 5], sourceRange: { startUs: 0, endUs: 1000000 } },
   ]);
 });
+
+test("a program that bundles the helper keeps its own stdin", async () => {
+  const { spawn, execFileSync } = await import("node:child_process");
+  const { mkdtempSync, realpathSync, writeFileSync } = await import("node:fs");
+  const { tmpdir } = await import("node:os");
+  const { join, resolve } = await import("node:path");
+  // A real path: a symlinked one (macOS /tmp, /var) makes the bundled check miss by accident.
+  const directory = realpathSync(mkdtempSync(join(tmpdir(), "caption-bundle-")));
+  const helper = resolve("skills/yap/scripts/caption-proposals.mjs");
+  writeFileSync(
+    join(directory, "entry.mjs"),
+    `import { captionProposals } from ${JSON.stringify(helper)};\nconsole.log(typeof captionProposals);\n`,
+  );
+  execFileSync("bun", ["build", "entry.mjs", "--target=node", "--outfile=main.mjs"], {
+    cwd: directory,
+    stdio: "pipe",
+  });
+  // The service's control channel stays open; a helper that waits for its end never returns.
+  const child = spawn(process.execPath, [join(directory, "main.mjs")], { stdio: "pipe" });
+  let stdout = "";
+  child.stdout.on("data", (chunk) => (stdout += chunk));
+  const settled = await Promise.race([
+    new Promise((done) => child.once("close", () => done(true))),
+    new Promise((done) => setTimeout(() => done(false), 5000)),
+  ]);
+  child.kill();
+  assert.ok(settled, "the bundled program waited on stdin instead of running");
+  assert.equal(stdout.trim(), "function");
+});
+
+test("the consumer command runs from a symlinked folder", async () => {
+  const { spawn } = await import("node:child_process");
+  const { mkdtempSync, symlinkSync } = await import("node:fs");
+  const { tmpdir } = await import("node:os");
+  const { join, resolve } = await import("node:path");
+  const link = join(mkdtempSync(join(tmpdir(), "caption-link-")), "scripts");
+  symlinkSync(resolve("skills/yap/scripts"), link);
+  const child = spawn(process.execPath, [join(link, "caption-proposals.mjs")], { stdio: "pipe" });
+  let stdout = "";
+  child.stdout.on("data", (chunk) => (stdout += chunk));
+  child.stdin.end(JSON.stringify({ ...request(), cli: { executable: "/does/not/exist/yap" } }));
+  const code = await new Promise((done) => child.once("close", done));
+  assert.equal(code, 0);
+  assert.deepEqual(
+    JSON.parse(stdout).proposals.map((p) => p.text),
+    ["Hello,\nworld!", "Again."],
+  );
+});

@@ -10,7 +10,9 @@ import { verifyVideoDelivery } from "../packages/test-harness/editing/hevc-deliv
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const receipt = JSON.parse(readFileSync(join(root, "dist/release/release.json")));
 const kit = kitName(readFileSync(join(root, "dist/release/SHA256SUMS"), "utf8"));
-const scratch = mkdtempSync("/tmp/yap-release-");
+// Installed apps live at real paths. macOS /tmp is a symlink, and a service started through
+// one can pass a check that the same app fails once it is installed.
+const scratch = realpathSync(mkdtempSync("/tmp/yap-release-"));
 let child, exited, cleanupError, spawnError;
 try {
   const moved = join(scratch, "Relocated release");
