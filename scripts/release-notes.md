@@ -6,6 +6,11 @@ The capture menu keeps its dark appearance after selecting a recording area and
 shows the latest recording below the action buttons with Play and Copy agent prompt
 actions. Screen recordings now include the pointer in the captured video.
 
+## 0.1.48
+
+Closing a recording's window in the Library now stops its sound; before, the audio
+kept playing after the window closed.
+
 ## 0.1.47
 
 The Library and preview windows are redesigned. Library rows show what you need
