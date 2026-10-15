@@ -32,6 +32,8 @@ public struct ControlsState: Equatable, Sendable {
     public var selection = CaptureSelection()
     public var library = LibraryState()
     public var updates = UpdateControls()
+    /// A message from the Yap team for this version, shown in the menu and in Settings.
+    public var adminMessage: String?
     /// Whether this app is counting a take in before it starts. It belongs to the app rather than
     /// the service — no take exists yet — but the menu has to say so, because while it counts the
     /// only thing Start can mean is "never mind".

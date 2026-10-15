@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { randomUUID } from "node:crypto";
 import appManifest from "../../macos/package.json" with { type: "json" };
+import { readFileSync } from "node:fs";
 import { mkdir, mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
@@ -34,6 +35,7 @@ import {
   encodeJsonLine,
   operationError,
   isArtifactMaintenance,
+  personalHome,
   type OperationRequest,
   type OperationResponse,
   type OperationWireResponse,
@@ -225,7 +227,22 @@ async function mcp(selection: ServiceSelection) {
 let errorOutput: NodeJS.WritableStream = process.stderr;
 let responseId = "cli";
 
+/**
+ * The admin notice the app saved for this version, if any. The app fetches it; the command line
+ * never touches the network for it, and any problem reading it means no notice.
+ */
+function showAdminNotice() {
+  try {
+    const saved = JSON.parse(
+      readFileSync(join(personalHome(process.env), "notice.json"), "utf8"),
+    ) as { version?: unknown; message?: unknown };
+    if (saved.version === version && typeof saved.message === "string" && saved.message)
+      process.stderr.write(`Yap notice: ${saved.message.replace(/\s+/g, " ").slice(0, 2000)}\n`);
+  } catch {}
+}
+
 async function main() {
+  showAdminNotice();
   const { values, positionals } = parseArgs({
     options: {
       socket: { type: "string" },

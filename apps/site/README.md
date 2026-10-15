@@ -25,6 +25,20 @@ as plain text at `/llms.txt` for agents.
   to `dist/`. There is no download button: agents are the only install route, and
   the page's Open in Claude Code / Open in Codex links only pre-fill the prompt.
 
+## Admin notices
+
+[notices.json](notices.json) is how the team tells people on a particular release
+what to do when something has gone wrong, such as "back up your library" or
+"reinstall from justyap.io". The app fetches it at launch and hourly, shows the first
+notice whose `versions` regular expression matches its version in the menu and in
+Settings, and saves it so the command line prints it on stderr. Anchor patterns, as
+in `^0\.1\.4[01]$`. The app ignores a missing, unreadable or malformed file, so a
+mistake here can hide a notice but never breaks the app.
+
+```json
+{ "notices": [{ "versions": "^0\\.1\\.4[01]$", "message": "Reinstall Yap from justyap.io." }] }
+```
+
 ## Build and check
 
 ```sh

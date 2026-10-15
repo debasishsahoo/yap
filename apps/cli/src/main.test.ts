@@ -1349,3 +1349,26 @@ it("app operations reach the app directly, so they work while the service is dow
   // Discovery's own probe is update.status; nothing else reached the app.
   expect(new Set(asked)).toEqual(new Set(["update.status", "login.status"]));
 });
+
+it("the CLI shows the admin notice the app saved for its own version, on stderr only", async () => {
+  const home = await mkdtemp("/tmp/yap-notice-");
+  cleanup.push(() => rm(home, { recursive: true, force: true }));
+  const { version } = JSON.parse(
+    await readFile(new URL("../../macos/package.json", import.meta.url), "utf8"),
+  );
+  const env = { ...process.env, YAP_HOME: home, YAP_APP: "must-not-launch" };
+  const save = (value: unknown) => writeFile(join(home, "notice.json"), JSON.stringify(value));
+
+  await save({ version, message: "Back up your library, then restart Yap." });
+  const shown = await runCli(["--version"], env);
+  expect(shown.status).toBe(0);
+  expect(shown.stderr).toBe("Yap notice: Back up your library, then restart Yap.\n");
+  expect(shown.stdout).not.toContain("notice");
+
+  await save({ version: "0.0.1", message: "For another version" });
+  expect((await runCli(["--version"], env)).stderr).toBe("");
+  await writeFile(join(home, "notice.json"), "not json");
+  const broken = await runCli(["--version"], env);
+  expect(broken.status).toBe(0);
+  expect(broken.stderr).toBe("");
+});

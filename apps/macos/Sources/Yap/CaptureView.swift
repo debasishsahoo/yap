@@ -46,6 +46,8 @@ struct CaptureViewInput: Equatable {
     let status: String
     var screenSourcesEnabled = true
     var notices: [String] = []
+    /// A message from the Yap team for this version; it leads the panel as a banner.
+    var adminMessage: String?
     var permissionActions: [PresentedControlsAction] = []
     var transport: [PresentedControlsAction] = []
     var startTitle: String = "Start Recording"
@@ -125,6 +127,37 @@ final class CaptureView: NSView {
 
     /// Identifiers address native controls by user-visible purpose, including accessibility/probes.
     func control(identifier: String) -> NSControl? { controls[identifier] }
+
+    /// Draws the team's message, if any, as a tinted banner the width of the source tiles, and
+    /// answers how far it pushes the rest of the panel down.
+    private func adminBanner(at y: CGFloat) -> CGFloat {
+        guard let message = input.adminMessage else { return 0 }
+        let width: CGFloat = 320, inset: CGFloat = 10, icon: CGFloat = 16
+        let text = NSTextField(wrappingLabelWithString: message)
+        text.font = .systemFont(ofSize: 12, weight: .medium)
+        text.textColor = .labelColor
+        text.isSelectable = true
+        let textWidth = width - inset * 3 - icon
+        let measured = text.cell?.cellSize(forBounds: NSRect(x: 0, y: 0, width: textWidth, height: .greatestFiniteMagnitude)) ?? .zero
+        let height = max(icon, ceil(measured.height)) + inset * 2
+        let banner = NSView(frame: NSRect(x: 16, y: y, width: width, height: height))
+        banner.wantsLayer = true
+        banner.layer?.cornerRadius = 8
+        banner.layer?.backgroundColor = NSColor.systemOrange.withAlphaComponent(0.18).cgColor
+        banner.layer?.borderColor = NSColor.systemOrange.withAlphaComponent(0.55).cgColor
+        banner.layer?.borderWidth = 1
+        banner.setAccessibilityElement(true)
+        banner.setAccessibilityLabel("Message from the Yap team: \(message)")
+        // The banner draws bottom-up; the icon sits beside the first line of the message.
+        let symbol = NSImageView(frame: NSRect(x: inset, y: height - inset - icon - 1, width: icon, height: icon))
+        symbol.image = NSImage(systemSymbolName: "exclamationmark.triangle.fill", accessibilityDescription: nil)
+        symbol.contentTintColor = .systemOrange
+        banner.addSubview(symbol)
+        text.frame = NSRect(x: inset * 2 + icon, y: inset, width: textWidth, height: ceil(measured.height))
+        banner.addSubview(text)
+        document.addSubview(banner)
+        return height + 12
+    }
 
     private func label(_ text: String, _ frame: NSRect, size: CGFloat, weight: NSFont.Weight = .regular,
                        color: NSColor = .labelColor, host: NSView? = nil) {
@@ -248,16 +281,17 @@ final class CaptureView: NSView {
         label("Yap", NSRect(x: 54, y: 20, width: 180, height: 22), size: 16, weight: .semibold)
         button("Open library", id: "header.library", frame: NSRect(x: 258, y: 12, width: 34, height: 34), intent: .openLibrary, symbol: "play.rectangle.on.rectangle")
         button("Settings", id: "header.settings", frame: NSRect(x: 307, y: 12, width: 34, height: 34), intent: .controls(.openSettings), symbol: "gearshape")
-        label("Record", NSRect(x: 16, y: 58, width: 100, height: 16), size: 11, weight: .medium, color: .secondaryLabelColor)
+        let top = adminBanner(at: 56)
+        label("Record", NSRect(x: 16, y: 58 + top, width: 100, height: 16), size: 11, weight: .medium, color: .secondaryLabelColor)
         let titles = ["Display", "Window", "Area", "Camera"]
         let symbols = ["display", "macwindow", "viewfinder", "video"]
         for (index, source) in CaptureViewInput.Source.allCases.enumerated() {
             button(titles[index], id: "source.\(source.rawValue)",
-                frame: NSRect(x: 16 + CGFloat(index) * 82, y: 80, width: 74, height: 64),
+                frame: NSRect(x: 16 + CGFloat(index) * 82, y: 80 + top, width: 74, height: 64),
                 intent: .chooseSource(source), kind: .tile(selected: source == input.selectedSource), symbol: symbols[index],
                 enabled: input.inputsEnabled && (source == .cameraOnly || input.screenSourcesEnabled))
         }
-        var y: CGFloat = 156
+        var y: CGFloat = 156 + top
         if input.selectedSource != .cameraOnly {
             let sourceChoices = input.screenSourcesEnabled ? input.sourceChoices
                 : [.init(title: "Screen Recording access required", intent: .chooseSource(input.selectedSource))]

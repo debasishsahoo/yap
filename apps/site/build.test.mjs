@@ -92,3 +92,13 @@ test("the page streams the launch video from its host and ships the poster", () 
   const poster = video.match(/poster="\/([^"]+)"/)?.[1];
   assert.ok(poster && statSync(join(out, poster)).size > 0, "poster is shipped");
 });
+
+test("the site publishes the admin notice feed the app reads", () => {
+  const feed = JSON.parse(built()("notices.json"));
+  assert.ok(Array.isArray(feed.notices));
+  for (const notice of feed.notices) {
+    assert.equal(typeof notice.versions, "string");
+    assert.ok(new RegExp(notice.versions));
+    assert.equal(typeof notice.message, "string");
+  }
+});

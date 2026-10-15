@@ -129,6 +129,12 @@ final class RecordingControls: NSObject {
         if preferences.setUpAgents { homeLifecycle.setEnabled(true) }
     }
 
+    func showAdminMessage(_ message: String?) {
+        guard state.adminMessage != message else { return }
+        state.adminMessage = message
+        render()
+    }
+
     func configureUpdates(_ updates: UpdateControls,
                           operation: @escaping (String, Data) -> Result<Data, ServiceFailure>) {
         state.updates = updates
@@ -916,6 +922,7 @@ final class RecordingControls: NSObject {
         input.startTitle = transport[0].title
         input.startShortcut = ShortcutDefaults(bindings: bindings, registered: held).display(of: .startOrStop)
         input.notices = CapturePresentation.noticeLines(for: state)
+        input.adminMessage = state.adminMessage
         input.screenSourcesEnabled = state.screenSelectionAuthorized
         if !input.screenSourcesEnabled {
             input.notices.append(CapturePresentation.screenSelectionPermissionNotice)

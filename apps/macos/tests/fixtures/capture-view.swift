@@ -278,6 +278,8 @@ import YapControls
             ("recording", recordingFixture(), CGFloat(0)),
             ("last-recording", fixture(lastRecording: true), CGFloat(0)),
             ("paused", recordingFixture(paused: true), CGFloat(0)),
+            ("admin-notice", adminNoticeFixture(), CGFloat(0)),
+            ("admin-notice-dark", adminNoticeFixture(), CGFloat(0)),
             ("permissions", permissionFixture(), CGFloat(0)),
             ("permissions-dark", permissionFixture(), CGFloat(0)),
             ("dark", fixture(), CGFloat(0)),
@@ -369,6 +371,12 @@ import YapControls
         precondition(actionGaps.allSatisfy { $0 > 0 && $0 == actionGaps[0] },
                      "Recording actions need equal positive gaps, including beneath Finish")
 
+    }
+
+    @MainActor static func adminNoticeFixture() -> CaptureViewInput {
+        var input = fixture()
+        input.adminMessage = "Yap 0.1.41 cannot update itself. Back up ~/.yap, then reinstall Yap from justyap.io."
+        return input
     }
 
     @MainActor static func permissionFixture() -> CaptureViewInput {

@@ -235,6 +235,15 @@ struct SettingsView: View {
 
     var body: some View {
         Form {
+            if let message = model.state.adminMessage {
+                Section("From the Yap team") {
+                    Label {
+                        Text(message).fontWeight(.medium).textSelection(.enabled)
+                    } icon: {
+                        Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.orange)
+                    }
+                }
+            }
             Section("About") {
                 LabeledContent("Version", value: Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "Development")
             }

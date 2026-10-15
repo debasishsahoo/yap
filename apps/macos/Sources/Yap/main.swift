@@ -22,6 +22,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var controls: RecordingControls?
     private var service: ServiceHost?
     private var appSocket: AppSocket?
+    private var adminNoticeTimer: Timer?
     /// Counts service starts; state reports from a service that has since been replaced are ignored.
     private var serviceGeneration = 0
     private var controller: CaptureController?
@@ -86,6 +87,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         refreshUpdateControls()
         probe = ControlsProbe.requested(controls: controls)
         startAppSocket()
+        startAdminNotices()
         startService(capture: controller)
         // A launch that serves a client request starts the service and nothing else: nobody asked
         // to see this app, so no window of it comes forward.
@@ -173,6 +175,41 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                                         canCheck: sparkle?.canCheckForUpdates ?? false), operation: { [weak self] operation, params in
             self?.handleUpdate(operation, params) ?? .failure(ServiceFailure(code: "UPDATE_UNAVAILABLE", message: "No native updater is connected."))
         })
+    }
+
+    /// The team's message for this version: the last one saved shows at once, even offline, and a
+    /// fresh copy is fetched at launch and hourly. Every failure leaves things as they were.
+    private func startAdminNotices() {
+        let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? ""
+        let saved = URL(fileURLWithPath: (personalRoot() as NSString).appendingPathComponent("notice.json"))
+        if let data = try? Data(contentsOf: saved),
+            let cached = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+            cached["version"] as? String == version
+        {
+            controls?.showAdminMessage(cached["message"] as? String)
+        }
+        let refresh = { [weak self] in
+            var request = URLRequest(url: AdminNotice.feed, cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: 15)
+            request.setValue("Yap/\(version)", forHTTPHeaderField: "User-Agent")
+            URLSession.shared.dataTask(with: request) { data, response, _ in
+                guard let data, (response as? HTTPURLResponse)?.statusCode == 200,
+                    (try? JSONSerialization.jsonObject(with: data)) is [String: Any]
+                else { return }
+                let message = AdminNotice.message(from: data, version: version)
+                let record: [String: Any] = ["version": version, "message": message as Any? ?? NSNull()]
+                if let encoded = try? JSONSerialization.data(withJSONObject: record) {
+                    try? FileManager.default.createDirectory(
+                        at: saved.deletingLastPathComponent(), withIntermediateDirectories: true,
+                        attributes: [.posixPermissions: 0o700])
+                    try? encoded.write(to: saved, options: .atomic)
+                }
+                DispatchQueue.main.async {
+                    MainActor.assumeIsolated { self?.controls?.showAdminMessage(message) }
+                }
+            }.resume()
+        }
+        refresh()
+        adminNoticeTimer = Timer.scheduledTimer(withTimeInterval: 3600, repeats: true) { _ in refresh() }
     }
 
     /// The app's own operations, answered on its socket so they work without the service.
