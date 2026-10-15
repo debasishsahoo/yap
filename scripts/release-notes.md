@@ -6,6 +6,14 @@ The capture menu keeps its dark appearance after selecting a recording area and
 shows the latest recording below the action buttons with Play and Copy agent prompt
 actions. Screen recordings now include the pointer in the captured video.
 
+## 0.1.46
+
+You can screenshot and share the preview window again; it hides from capture only
+while Yap is recording, so a take never records it. The dark bar across the top
+of previews is gone: revision history and Export now sit above the video, only
+when there is something to show, and previews open at 16:9. Clicking a recording
+or project in the Library plays or previews it.
+
 ## 0.1.45
 
 The Yap team can now show a message to specific versions, for when something has
