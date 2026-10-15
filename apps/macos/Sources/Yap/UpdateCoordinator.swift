@@ -107,7 +107,7 @@ final class UpdateCoordinator {
         // A service ended for an update that is no longer pending must not stay down. One that
         // failed on its own is not restarted here, so a broken release cannot restart in a loop.
         if ended, install == nil {
-            if !quitting { restartService?() }
+            restart()
             return
         }
         serviceFailed = true
@@ -333,12 +333,10 @@ final class UpdateCoordinator {
             // The service already exited for this installation; the next cycle needs one again.
             installerRequested = false
             cleanServiceExit = false
-            serviceFailed = false
-            host = nil
             phase = .waiting
             fence(false)
             fail(code: "UPDATE_FAILED", message: error?.localizedDescription ?? "Update installation stopped.")
-            restartService?()
+            restart()
             return
         }
         phase = .cancelling
@@ -356,10 +354,7 @@ final class UpdateCoordinator {
             status.blockers = []
             // A service ended for this update, or one that failed, must not stay down because
             // the update did not install.
-            if serviceFailed, !quitting {
-                serviceFailed = false
-                restartService?()
-            }
+            if serviceFailed { restart() }
             if let error {
                 fail(code: "UPDATE_FAILED", message: error.localizedDescription)
             } else {
@@ -377,11 +372,9 @@ final class UpdateCoordinator {
     private func stop(state: String) {
         generation = UUID()
         let old = phase
-        if old == .closing, !quitting {
+        if old == .closing {
             // The service was told to exit for this installation, which is not going ahead.
-            host = nil
-            serviceFailed = false
-            restartService?()
+            restart()
         }
         phase = .cancelling
         status.state = state
@@ -417,9 +410,18 @@ final class UpdateCoordinator {
             status.blockers = []
             status.state = install == nil ? (enabled ? "idle" : "disabled") : "waiting"
             publish()
-            restartService?()
+            restart()
             return false
         }
+    }
+    /// The one way this coordinator restarts the service: it forgets the old one, including any
+    /// end it was waiting on, and never restarts during a quit, whose path stops the service.
+    private func restart() {
+        host = nil
+        serviceFailed = false
+        endingService = false
+        guard !quitting else { return }
+        restartService?()
     }
     /// The service is stopped off the main actor: a hung one is escalated against within
     /// ServiceHost's own deadlines. Its exit reaches `serviceUnavailable`, which installs.

@@ -138,3 +138,22 @@ test("a first launch creates the socket's private directory, parents included", 
   child.stdin.end();
   await new Promise((resolve) => child.once("close", resolve));
 });
+
+test("a caller that trickles its request is cut off within the deadline", async (t) => {
+  const { scratch, executable } = build(t);
+  const path = join(scratch, "app.sock");
+  const { line } = await serve(t, executable, path);
+  assert.equal(line, "listening");
+  const started = Date.now();
+  const closedAfter = await new Promise((resolve, reject) => {
+    const socket = createConnection(path);
+    const drip = setInterval(() => socket.write("{"), 2_000);
+    socket.on("close", () => {
+      clearInterval(drip);
+      resolve(Date.now() - started);
+    });
+    socket.on("error", () => {});
+    setTimeout(() => reject(new Error("still connected after 15 s")), 15_000);
+  });
+  assert.ok(closedAfter < 8_000, `closed after ${closedAfter} ms`);
+});

@@ -456,3 +456,26 @@ test("a service ended for an update is restarted even when the cycle ends before
     ["cancel,restart"],
   );
 });
+
+test("quitting never restarts the service, whichever path would", (t) => {
+  const lost = peer.replace(
+    "send({event:'result',response:{id:request.id,ok:true,data}});",
+    "if (request.operation !== 'update.release') send({event:'result',response:{id:request.id,ok:true,data}});",
+  );
+  assert.deepEqual(
+    run(
+      t,
+      `
+ owner.restartService = { trace.append("restart") }
+ blockers = []
+ owner.ready(install: { trace.append("install") }, cancel: { trace.append("cancel"); owner.cycleFinished(error: nil) })
+ try? await Task.sleep(for: .milliseconds(70))
+ owner.ordinaryQuit()
+ try? await Task.sleep(for: .milliseconds(1500))
+ print(trace.joined(separator:","))
+ `,
+      lost,
+    ),
+    ["install,cancel"],
+  );
+});

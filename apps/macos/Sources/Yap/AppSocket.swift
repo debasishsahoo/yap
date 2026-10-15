@@ -137,7 +137,9 @@ final class AppSocket: @unchecked Sendable {
     private func readLine(_ client: Int32) -> Data? {
         var buffered = Data()
         var chunk = [UInt8](repeating: 0, count: 64 * 1024)
-        while buffered.count <= maxRequestBytes {
+        // Each read is bounded by SO_RCVTIMEO; this bounds a caller that trickles bytes.
+        let deadline = Date().addingTimeInterval(5)
+        while buffered.count <= maxRequestBytes, Date() < deadline {
             let count = read(client, &chunk, chunk.count)
             guard count > 0 else { return nil }
             if let end = chunk[0..<count].firstIndex(of: 0x0A) {
