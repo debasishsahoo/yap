@@ -151,6 +151,10 @@ Every build also carries the pinned `skills` installer
 The launcher finds the app at `$YAP_APP`, then `~/Applications/Yap.app`, then
 `/Applications/Yap.app`.
 
+When a published release misbehaves, tell the people running it with an
+[admin notice](../apps/site/README.md#admin-notices) targeted at its version, then
+publish a corrected version; never move the broken release's tag.
+
 ## Personal source installation
 
 The [installer](install-personal.mjs) owns app and launcher destinations and

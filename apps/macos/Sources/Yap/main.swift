@@ -178,7 +178,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     /// The team's message for this version: the last one saved shows at once, even offline, and a
-    /// fresh copy is fetched at launch and hourly. Every failure leaves things as they were.
+    /// fresh copy is fetched at launch and hourly. Every failure leaves things as they were. The
+    /// saved `notice.json` (`{version, message}`) is what the command line prints from.
     private func startAdminNotices() {
         let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? ""
         let saved = URL(fileURLWithPath: (personalRoot() as NSString).appendingPathComponent("notice.json"))

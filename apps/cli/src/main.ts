@@ -228,8 +228,9 @@ let errorOutput: NodeJS.WritableStream = process.stderr;
 let responseId = "cli";
 
 /**
- * The admin notice the app saved for this version, if any. The app fetches it; the command line
- * never touches the network for it, and any problem reading it means no notice.
+ * The admin notice the app saved for this version, if any: `notice.json` in the personal root,
+ * `{version, message}`, written by the app's `startAdminNotices`. The command line never touches
+ * the network for it, and any problem reading it means no notice.
  */
 function showAdminNotice() {
   try {

@@ -39,6 +39,10 @@ mistake here can hide a notice but never breaks the app.
 { "notices": [{ "versions": "^0\\.1\\.4[01]$", "message": "Reinstall Yap from justyap.io." }] }
 ```
 
+To publish one, edit the file and push to `main`: the site deploys in about two minutes
+and running apps pick it up within the hour (at once on their next launch). To
+clear it, set `"notices": []` the same way. Only Yap 0.1.45 and later read notices.
+
 ## Build and check
 
 ```sh

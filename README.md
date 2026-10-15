@@ -273,7 +273,9 @@ for personal keep/remove judgments.
   supplied-text interpretation and full native operands of its pinned provider.
 
 The [website](apps/site/README.md) is the public product page, with the same
-instructions as plain text for agents.
+instructions as plain text for agents. It also publishes the
+[admin notices](apps/site/README.md#admin-notices) the team uses to tell people on a
+particular release what to do when something has gone wrong.
 
 The consumer [yap skill](skills/yap/SKILL.md) teaches external agents
 how to edit for the user with the toolkit. Repository development skills live
