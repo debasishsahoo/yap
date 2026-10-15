@@ -496,7 +496,11 @@ test.each(["processing", "ready"])(
         data: { ...selection, state: "ready", generation, issues: [], published, page: {} },
       };
     });
-    const output = await f.run("transcript.transcribe", selection, ["--wait", "--timeout-ms", "1000"]);
+    const output = await f.run("transcript.transcribe", selection, [
+      "--wait",
+      "--timeout-ms",
+      "1000",
+    ]);
     expect(output.code, output.stdout + output.stderr).toBe(0);
     expect(JSON.parse(output.stdout).data.published.issues).toEqual([dropped]);
     expect(output.stderr).toContain("transcript.transcribe: ready (1 issues)");

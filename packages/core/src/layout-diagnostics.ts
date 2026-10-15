@@ -22,10 +22,7 @@ const intersects = (
 ) => a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height;
 
 /** Pure sampled evidence. It intentionally says nothing about unsampled frames or editorial quality. */
-export function layoutDiagnostics(
-  samples: readonly LayoutDiagnosticSample[],
-  maxIssues = 100,
-) {
+export function layoutDiagnostics(samples: readonly LayoutDiagnosticSample[], maxIssues = 100) {
   const issues: LayoutDiagnosticIssue[] = [];
   for (const sample of samples) {
     const { width, height } = sample.canvas;
@@ -64,7 +61,8 @@ export function layoutDiagnostics(
     }
     for (let i = 0; i < sample.texts.length; i++)
       for (let j = i + 1; j < sample.texts.length; j++) {
-        const a = sample.texts[i]!, b = sample.texts[j]!;
+        const a = sample.texts[i]!,
+          b = sample.texts[j]!;
         if (!intersects(a.bounds, b.bounds)) continue;
         issues.push({
           code: "text-overlap",

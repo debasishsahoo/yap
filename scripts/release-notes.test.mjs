@@ -9,10 +9,7 @@ test("release notes extract the shared intro and one version section", () => {
     extractReleaseNotes(notes, "v0.1.40"),
     "Yap intro.\n\n## 0.1.40\n\nCurrent change.\n",
   );
-  assert.equal(
-    extractReleaseNotes(notes, "0.1.39"),
-    "Yap intro.\n\n## 0.1.39\n\nOlder change.\n",
-  );
+  assert.equal(extractReleaseNotes(notes, "0.1.39"), "Yap intro.\n\n## 0.1.39\n\nOlder change.\n");
 });
 
 test("release notes refuse a version without a section", () => {

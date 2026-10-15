@@ -18,7 +18,8 @@ export function extractReleaseNotes(markdown, tagOrVersion) {
   if (start < 0) throw new Error(`No release notes section for ${version}`);
   const bodyStart = start + heading.length + 1;
   const nextHeading = markdown.slice(bodyStart).search(/^## /m);
-  const section = nextHeading < 0 ? markdown.slice(start) : markdown.slice(start, bodyStart + nextHeading);
+  const section =
+    nextHeading < 0 ? markdown.slice(start) : markdown.slice(start, bodyStart + nextHeading);
   return `${intro.trimEnd()}\n\n${section.trim()}\n`;
 }
 
@@ -26,5 +27,7 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const tag = process.argv[2];
   if (!tag || process.argv.length !== 3) throw new Error("Usage: node release-notes.mjs TAG");
   const root = dirname(fileURLToPath(import.meta.url));
-  process.stdout.write(extractReleaseNotes(readFileSync(join(root, "release-notes.md"), "utf8"), tag));
+  process.stdout.write(
+    extractReleaseNotes(readFileSync(join(root, "release-notes.md"), "utf8"), tag),
+  );
 }

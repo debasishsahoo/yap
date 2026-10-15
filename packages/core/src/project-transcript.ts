@@ -18,7 +18,12 @@ import { foldWord } from "./word-kind.js";
 import { mergeHeads, compareKey, type EvidenceKey } from "./evidence-merge.js";
 import type { EvidenceManifest, EvidencePagePlan, EvidenceCheckpoint } from "./project-evidence.js";
 import { sourceSelectionKey as selectionKey } from "./source-selection.js";
-import { applySpeakerCorrections, attributeTranscriptWords, type SpeakerAttribution, type SpeakerCorrection } from "./speaker-attribution.js";
+import {
+  applySpeakerCorrections,
+  attributeTranscriptWords,
+  type SpeakerAttribution,
+  type SpeakerCorrection,
+} from "./speaker-attribution.js";
 import type { SpeakerEvidenceMetadata, SpeakerEvidenceStore } from "./speaker-evidence.js";
 const scanBudget = 128;
 const range = (value: ExactRange): SelectionRange => ({
@@ -166,9 +171,9 @@ export function mergeTranscript(
       row.type === "word" && speakerRecords && dependency
         ? applySpeakerCorrections(
             attributeTranscriptWords(
-            [{ id: row.id, sourceRange: row.sourceRange }],
-            turnsFor(clip),
-            speakerLabels ? { labels: speakerLabels(dependency.evidence[0]!) } : {},
+              [{ id: row.id, sourceRange: row.sourceRange }],
+              turnsFor(clip),
+              speakerLabels ? { labels: speakerLabels(dependency.evidence[0]!) } : {},
             ),
             clip.clipId,
             speakerCorrections,

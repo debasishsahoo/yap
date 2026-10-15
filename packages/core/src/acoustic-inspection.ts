@@ -475,7 +475,10 @@ export class AcousticInspection {
   }
   private pinned(job: Job, options: z.infer<typeof optionsSchema>) {
     const source = this.owners.jobs.job(options.audioJobId);
-    if (!["audio", "audio-file"].includes(source.artifact) || !isDeepStrictEqual(source.target, job.target))
+    if (
+      !["audio", "audio-file"].includes(source.artifact) ||
+      !isDeepStrictEqual(source.target, job.target)
+    )
       throw lost("Acoustic dependency does not belong to its selected audio target");
     const status = this.owners.jobs.status(source);
     if (

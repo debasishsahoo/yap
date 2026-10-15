@@ -193,7 +193,9 @@ const inspectParams = project
   .extend({
     revisionId: id.optional(),
     range: range
-      .refine(({ startUs, endUs }) => endUs > startUs, { message: "Inspection range must be positive" })
+      .refine(({ startUs, endUs }) => endUs > startUs, {
+        message: "Inspection range must be positive",
+      })
       .optional(),
     historyLimit: z.int().min(1).max(100).optional(),
   })
@@ -218,13 +220,22 @@ const layoutDiagnosticParams = project
         z
           .object({
             atUs: time,
-            canvas: z.object({ width: z.number().positive(), height: z.number().positive() }).strict(),
+            canvas: z
+              .object({ width: z.number().positive(), height: z.number().positive() })
+              .strict(),
             texts: z
               .array(
                 z
                   .object({
                     id,
-                    bounds: z.object({ x: z.number(), y: z.number(), width: z.number().nonnegative(), height: z.number().nonnegative() }).strict(),
+                    bounds: z
+                      .object({
+                        x: z.number(),
+                        y: z.number(),
+                        width: z.number().nonnegative(),
+                        height: z.number().nonnegative(),
+                      })
+                      .strict(),
                     glyphs: z.array(z.string()).optional(),
                     fallback: z.string().optional(),
                   })
@@ -455,8 +466,19 @@ export const operationSchema = z.discriminatedUnion("operation", [
                     z.object({ range: range }).strict(),
                   ]),
                   value: z.union([
-                    z.object({ state: z.literal("attributed"), slot: z.int().min(0).max(3), displayName: z.string().trim().min(1).max(128).optional() }).strict(),
-                    z.object({ state: z.literal("overlap"), slots: z.array(z.int().min(0).max(3)).min(2).max(4) }).strict(),
+                    z
+                      .object({
+                        state: z.literal("attributed"),
+                        slot: z.int().min(0).max(3),
+                        displayName: z.string().trim().min(1).max(128).optional(),
+                      })
+                      .strict(),
+                    z
+                      .object({
+                        state: z.literal("overlap"),
+                        slots: z.array(z.int().min(0).max(3)).min(2).max(4),
+                      })
+                      .strict(),
                     z.object({ state: z.literal("unknown") }).strict(),
                   ]),
                   provenance: z.string().min(1).max(4096),

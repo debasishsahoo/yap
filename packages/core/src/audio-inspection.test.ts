@@ -142,7 +142,9 @@ async function fixture(
         isCapturing: () => false,
       },
       execute: (execution) =>
-        ["waveform", "spectrum", "acoustic-image", "loudness", "pause"].includes(execution.job.artifact)
+        ["waveform", "spectrum", "acoustic-image", "loudness", "pause"].includes(
+          execution.job.artifact,
+        )
           ? waveform.execute(execution)
           : inspection.execute(execution),
     });
@@ -948,7 +950,11 @@ test("loudness missing-support refusal preserves rational source endpoints and d
 
 test("pause analysis exposes resolved detector settings and low-energy intervals", async () => {
   const f = await fixture();
-  const pending = await f.waveform.request({ ...f.selection, kind: "pause", minDurationUs: 100_000 });
+  const pending = await f.waveform.request({
+    ...f.selection,
+    kind: "pause",
+    minDurationUs: 100_000,
+  });
   await f.jobs.idle();
   await f.waveform.request({ ...f.selection, kind: "pause", minDurationUs: 100_000 });
   await f.jobs.idle();

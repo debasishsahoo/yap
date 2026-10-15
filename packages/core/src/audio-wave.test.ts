@@ -110,11 +110,15 @@ test("absolute buckets preserve independent channels and clipped sample windows 
 });
 
 test("pause intervals report contiguous low-energy windows and skip unavailable support", async () => {
-  const f = fixture([
-    ...Array.from({ length: 4 }, () => [0.5]),
-    ...Array.from({ length: 8 }, () => [0]),
-    ...Array.from({ length: 4 }, () => [0.5]),
-  ], 0, 10);
+  const f = fixture(
+    [
+      ...Array.from({ length: 4 }, () => [0.5]),
+      ...Array.from({ length: 8 }, () => [0]),
+      ...Array.from({ length: 4 }, () => [0.5]),
+    ],
+    0,
+    10,
+  );
   const result = await pauseIntervals(
     f.read,
     f.audio,

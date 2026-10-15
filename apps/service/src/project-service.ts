@@ -145,7 +145,6 @@ function sourceTranscriptPublication(published: { generation: number | string; i
   return { generation: published.generation, issues: published.issues };
 }
 
-
 function sameTranscriptSpeakerRequest(
   a: TranscriptSpeakerRequest,
   b: TranscriptSpeakerRequest,
@@ -2517,11 +2516,7 @@ export async function startProjectService(options: {
             const params = operation.params;
             const project = projects.get(params.projectId);
             const revision = projects.revision(params.projectId, params.revisionId);
-            const history = projects.history(
-              params.projectId,
-              null,
-              params.historyLimit ?? 50,
-            );
+            const history = projects.history(params.projectId, null, params.historyLimit ?? 50);
             let native: unknown = { opened: false, reason: "native_app_unavailable" };
             if (controller) {
               const answer = await controller.call("inspect.open", {

@@ -88,14 +88,38 @@ test("inspect, caption proposal and layout diagnostics stay pinned and read-only
     revisionId: f.revision.id,
     trackId: "captions",
     canvas: { width: 100, height: 100 },
-    style: { font: { assetId: "font", postScriptName: "Fixture" }, width: 100, height: 100, size: 20, color: "#ffffffff", alignment: "left", wrap: true },
-    constraints: { widthGraphemes: 30, maxLines: 2, minDwellUs: 1, maxDwellUs: 100, maxCps: 30, pauseUs: 1, breakOnPunctuation: true, separator: " ", safeArea: { x: 0, y: 0, width: 100, height: 100 } },
+    style: {
+      font: { assetId: "font", postScriptName: "Fixture" },
+      width: 100,
+      height: 100,
+      size: 20,
+      color: "#ffffffff",
+      alignment: "left",
+      wrap: true,
+    },
+    constraints: {
+      widthGraphemes: 30,
+      maxLines: 2,
+      minDwellUs: 1,
+      maxDwellUs: 100,
+      maxCps: 30,
+      pauseUs: 1,
+      breakOnPunctuation: true,
+      separator: " ",
+      safeArea: { x: 0, y: 0, width: 100, height: 100 },
+    },
   });
   expect(proposed).toMatchObject({ ok: false, error: { code: "NOT_READY" } });
   const diagnostics = await f.call("layout.diagnostics", {
     projectId: f.project.projectId,
     revisionId: f.revision.id,
-    samples: [{ atUs: 0, canvas: { width: 100, height: 100 }, texts: [{ id: "caption", bounds: { x: 99, y: 0, width: 5, height: 5 } }] }],
+    samples: [
+      {
+        atUs: 0,
+        canvas: { width: 100, height: 100 },
+        texts: [{ id: "caption", bounds: { x: 99, y: 0, width: 5, height: 5 } }],
+      },
+    ],
   });
   expect(diagnostics.ok).toBe(true);
   if (diagnostics.ok) {
@@ -104,7 +128,9 @@ test("inspect, caption proposal and layout diagnostics stay pinned and read-only
     expect(data.issues.map((issue) => issue.code)).toContain("text-off-canvas");
   }
   expect(await f.state()).toEqual(before);
-  expect(await f.call("inspect.open", { projectId: f.project.projectId, revisionId: "missing" })).toMatchObject({ ok: false, error: { code: "NOT_FOUND" } });
+  expect(
+    await f.call("inspect.open", { projectId: f.project.projectId, revisionId: "missing" }),
+  ).toMatchObject({ ok: false, error: { code: "NOT_FOUND" } });
 });
 async function sendRaw(socketPath: string, bytes: Buffer) {
   await new Promise<void>((resolve, reject) => {
@@ -653,7 +679,11 @@ test("selected-source transcript preserves filler, phrase and ready retry throug
   });
   expect(await readFile(requests[0]!.track.source, "utf8")).toBe("image bytes");
   let projectTranscript = await f.call("transcript.get", projectSelection);
-  for (let poll = 0; projectTranscript.ok && (projectTranscript.data as { state: string }).state !== "ready"; poll++) {
+  for (
+    let poll = 0;
+    projectTranscript.ok && (projectTranscript.data as { state: string }).state !== "ready";
+    poll++
+  ) {
     if (poll > 300) throw new Error(JSON.stringify(projectTranscript));
     await new Promise((resolve) => setTimeout(resolve, 10));
     projectTranscript = await f.call("transcript.get", projectSelection);
@@ -690,9 +720,7 @@ test("selected-source transcript preserves filler, phrase and ready retry throug
     ok: true,
     data: {
       identity: { projectId: projectSelection.projectId, revisionId: projectSelection.revisionId },
-      proposals: [
-        { text: "Open the Settings panel." },
-      ],
+      proposals: [{ text: "Open the Settings panel." }],
     },
   });
   expect(await f.call("project.list", {})).toMatchObject({

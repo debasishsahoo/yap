@@ -848,7 +848,17 @@ it("admits the read-only review workflow operations", () => {
         trackId: "track",
         canvas: { width: 100, height: 100 },
         style: { font: { assetId: "font", postScriptName: "Fixture" } },
-        constraints: { widthGraphemes: 30, maxLines: 2, minDwellUs: 1, maxDwellUs: 100, maxCps: 30, pauseUs: 1, breakOnPunctuation: true, separator: " ", safeArea: { x: 0, y: 0, width: 100, height: 100 } },
+        constraints: {
+          widthGraphemes: 30,
+          maxLines: 2,
+          minDwellUs: 1,
+          maxDwellUs: 100,
+          maxCps: 30,
+          pauseUs: 1,
+          breakOnPunctuation: true,
+          separator: " ",
+          safeArea: { x: 0, y: 0, width: 100, height: 100 },
+        },
       },
     }).operation,
   ).toBe("caption.propose");
@@ -858,9 +868,7 @@ it("admits the read-only review workflow operations", () => {
       params: {
         projectId: "p",
         revisionId: "r",
-        samples: [
-          { atUs: 0, canvas: { width: 100, height: 100 }, texts: [] },
-        ],
+        samples: [{ atUs: 0, canvas: { width: 100, height: 100 }, texts: [] }],
       },
     }).operation,
   ).toBe("layout.diagnostics");

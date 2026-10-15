@@ -7,13 +7,7 @@ import * as content from "./content.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const artwork = join(here, "../../.github/readme");
-const staticFiles = [
-  "style.css",
-  "main.js",
-  "favicon.svg",
-  "og.png",
-  content.launchVideo.poster,
-];
+const staticFiles = ["style.css", "main.js", "favicon.svg", "og.png", content.launchVideo.poster];
 
 /** Production origin: explicit SITE_URL, else Vercel's production domain, else local preview. */
 function defaultSiteUrl() {

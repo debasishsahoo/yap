@@ -377,12 +377,20 @@ export class ProjectStore {
   }
   correctSpeakers(
     projectId: string,
-    request: { requestId: string; expectedRevisionId: string; corrections: readonly SpeakerCorrection[] },
+    request: {
+      requestId: string;
+      expectedRevisionId: string;
+      corrections: readonly SpeakerCorrection[];
+    },
   ): ProjectRevision {
     return this.mutate(
       projectId,
       request.requestId,
-      { operation: "speaker.correct", expectedRevisionId: request.expectedRevisionId, corrections: request.corrections },
+      {
+        operation: "speaker.correct",
+        expectedRevisionId: request.expectedRevisionId,
+        corrections: request.corrections,
+      },
       () => {
         const current = this.current(projectId, request.expectedRevisionId);
         const revision: ProjectRevision = {
@@ -468,7 +476,9 @@ export class ProjectStore {
       createdAt: new Date().toISOString(),
       operation: "apply",
       document: edit.document,
-      ...(current.speakerCorrections === undefined ? {} : { speakerCorrections: current.speakerCorrections }),
+      ...(current.speakerCorrections === undefined
+        ? {}
+        : { speakerCorrections: current.speakerCorrections }),
     };
     this.insertRevision(revision, {
       origins: current.document.clips,

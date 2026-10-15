@@ -33,7 +33,12 @@ function invalid(message: string, details: Record<string, unknown> = {}): never 
 }
 
 function range(startUs: number, endUs: number): ImportedRange {
-  if (!Number.isSafeInteger(startUs) || !Number.isSafeInteger(endUs) || startUs < 0 || endUs <= startUs)
+  if (
+    !Number.isSafeInteger(startUs) ||
+    !Number.isSafeInteger(endUs) ||
+    startUs < 0 ||
+    endUs <= startUs
+  )
     invalid("Transcript timing must be a non-empty non-negative range", { startUs, endUs });
   return { startUs, endUs };
 }
@@ -42,7 +47,8 @@ function timestamp(value: unknown): number {
   if (typeof value === "number") {
     if (!Number.isFinite(value) || value < 0) invalid("Transcript timestamp is invalid", { value });
     const micros = Math.round(value * 1_000_000);
-    if (!Number.isSafeInteger(micros)) invalid("Transcript timestamp is outside the supported range", { value });
+    if (!Number.isSafeInteger(micros))
+      invalid("Transcript timestamp is outside the supported range", { value });
     return micros;
   }
   if (typeof value !== "string") invalid("Transcript timestamp must be a string or number");
@@ -74,20 +80,34 @@ function extractSpeaker(text: string): { text: string; speaker?: string } {
   return { text: match[2]!.trim(), speaker };
 }
 
-function cue(id: string, ordinal: number, source: ImportedRange, text: string, speaker?: string, settings?: string): ImportedCue {
+function cue(
+  id: string,
+  ordinal: number,
+  source: ImportedRange,
+  text: string,
+  speaker?: string,
+  settings?: string,
+): ImportedCue {
   const extracted = extractSpeaker(text);
   return {
     id,
     ordinal,
     text: extracted.text,
-    ...(speaker === undefined ? (extracted.speaker === undefined ? {} : { speaker: extracted.speaker }) : { speaker }),
+    ...(speaker === undefined
+      ? extracted.speaker === undefined
+        ? {}
+        : { speaker: extracted.speaker }
+      : { speaker }),
     ...(settings === undefined ? {} : { settings }),
     source,
     words: [],
   };
 }
 
-function parseTextCues(raw: string, format: "srt" | "vtt"): { cues: ImportedCue[]; metadata: Record<string, unknown> } {
+function parseTextCues(
+  raw: string,
+  format: "srt" | "vtt",
+): { cues: ImportedCue[]; metadata: Record<string, unknown> } {
   const normalized = raw.replace(/^\uFEFF/, "").replace(/\r\n?/g, "\n");
   const lines = normalized.split("\n");
   let index = 0;
@@ -117,7 +137,11 @@ function parseTextCues(raw: string, format: "srt" | "vtt"): { cues: ImportedCue[
     while (index < lines.length && lines[index]!.trim()) textLines.push(lines[index++]!);
     if (!textLines.length) invalid("Transcript cue has no text", { id });
     const text = textLines.join("\n");
-    cues.push(format === "vtt" ? cue(id, cues.length, timed.source, text, undefined, timed.settings) : { id, ordinal: cues.length, text, source: timed.source, words: [] });
+    cues.push(
+      format === "vtt"
+        ? cue(id, cues.length, timed.source, text, undefined, timed.settings)
+        : { id, ordinal: cues.length, text, source: timed.source, words: [] },
+    );
   }
   if (!cues.length) invalid("Transcript contains no cues");
   return { cues, metadata: {} };
@@ -146,16 +170,25 @@ function parseJson(raw: string): { cues: ImportedCue[]; metadata: Record<string,
     if (!entry || typeof entry !== "object") invalid("Transcript JSON cue is invalid", { ordinal });
     const item = entry as Record<string, unknown>;
     const text = item.text;
-    if (typeof text !== "string" || !text.trim()) invalid("Transcript JSON cue text is invalid", { ordinal });
+    if (typeof text !== "string" || !text.trim())
+      invalid("Transcript JSON cue text is invalid", { ordinal });
     const words = item.words;
-    if (words !== undefined && !Array.isArray(words)) invalid("Transcript JSON cue words are invalid", { ordinal });
+    if (words !== undefined && !Array.isArray(words))
+      invalid("Transcript JSON cue words are invalid", { ordinal });
     const parsedWords = (words ?? []).map((word, wordOrdinal) => {
-      if (!word || typeof word !== "object") invalid("Transcript JSON word is invalid", { ordinal, wordOrdinal });
+      if (!word || typeof word !== "object")
+        invalid("Transcript JSON word is invalid", { ordinal, wordOrdinal });
       const w = word as Record<string, unknown>;
-      if (typeof w.text !== "string" || !w.text.trim()) invalid("Transcript JSON word text is invalid", { ordinal, wordOrdinal });
+      if (typeof w.text !== "string" || !w.text.trim())
+        invalid("Transcript JSON word text is invalid", { ordinal, wordOrdinal });
       const result: ImportedWord = { text: w.text, source: objectRange(w, "word") };
       if (w.confidence !== undefined) {
-        if (typeof w.confidence !== "number" || !Number.isFinite(w.confidence) || w.confidence < 0 || w.confidence > 1)
+        if (
+          typeof w.confidence !== "number" ||
+          !Number.isFinite(w.confidence) ||
+          w.confidence < 0 ||
+          w.confidence > 1
+        )
           invalid("Transcript JSON word confidence is invalid", { ordinal, wordOrdinal });
         result.confidence = w.confidence;
       }
@@ -167,7 +200,8 @@ function parseJson(raw: string): { cues: ImportedCue[]; metadata: Record<string,
         invalid("Transcript JSON word falls outside its cue", { ordinal });
     const id = item.id === undefined ? String(ordinal + 1) : String(item.id);
     const speaker = item.speaker;
-    if (speaker !== undefined && typeof speaker !== "string") invalid("Transcript JSON speaker is invalid", { ordinal });
+    if (speaker !== undefined && typeof speaker !== "string")
+      invalid("Transcript JSON speaker is invalid", { ordinal });
     return {
       id,
       ordinal,
@@ -177,7 +211,9 @@ function parseJson(raw: string): { cues: ImportedCue[]; metadata: Record<string,
       words: parsedWords,
     };
   });
-  const metadata = Object.fromEntries(Object.entries(value as Record<string, unknown>).filter(([key]) => key !== "cues"));
+  const metadata = Object.fromEntries(
+    Object.entries(value as Record<string, unknown>).filter(([key]) => key !== "cues"),
+  );
   if (!cues.length) invalid("Transcript JSON contains no cues");
   return { cues, metadata };
 }
@@ -193,7 +229,13 @@ export function parseImportedTranscript(
   } catch {
     invalid("Transcript input is not valid UTF-8");
   }
-  const format = options.format ?? (raw.trimStart().startsWith("WEBVTT") ? "vtt" : raw.trimStart().startsWith("{") ? "json" : "srt");
+  const format =
+    options.format ??
+    (raw.trimStart().startsWith("WEBVTT")
+      ? "vtt"
+      : raw.trimStart().startsWith("{")
+        ? "json"
+        : "srt");
   const parsed = format === "json" ? parseJson(raw) : parseTextCues(raw, format);
   return {
     format,

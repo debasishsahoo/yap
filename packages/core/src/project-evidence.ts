@@ -744,7 +744,8 @@ export class ProjectEvidenceInspection {
                   this.options.records,
                   this.options.speakers?.records,
                   this.options.speakers?.labels,
-                  this.revisions.get(JSON.stringify([input.projectId, manifest.query.revisionId]))?.speakerCorrections ?? [],
+                  this.revisions.get(JSON.stringify([input.projectId, manifest.query.revisionId]))
+                    ?.speakerCorrections ?? [],
                 ),
                 events: [],
                 speakers: [],

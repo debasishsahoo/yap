@@ -84,7 +84,11 @@ test("the page streams the launch video from its host and ships the poster", () 
   assert.ok(video, "page has a video");
   assert.match(video, /\bcontrols\b/);
   assert.match(video, /preload="(none|metadata)"/, "a visit doesn't download the whole film");
-  assert.match(page, /<source src="https:\/\/[^"]+\.mp4" type="video\/mp4">/, "film is hosted, not in the repo");
+  assert.match(
+    page,
+    /<source src="https:\/\/[^"]+\.mp4" type="video\/mp4">/,
+    "film is hosted, not in the repo",
+  );
   const poster = video.match(/poster="\/([^"]+)"/)?.[1];
   assert.ok(poster && statSync(join(out, poster)).size > 0, "poster is shipped");
 });
