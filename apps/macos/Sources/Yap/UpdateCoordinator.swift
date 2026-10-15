@@ -47,6 +47,10 @@ final class UpdateCoordinator {
     private(set) var enabled = false
     private(set) var cleanServiceExit = false
     private var serviceFailed = false
+    /// This coordinator ended the service and is waiting for it to exit.
+    private var endingService = false
+    /// The app is quitting: its termination path stops the service, so nothing restarts it.
+    private var quitting = false
     /// Consecutive cycles in which a running service answered the permit request with a refusal.
     private var refusedCycles = 0
     private(set) var checkMessage: String?
@@ -97,6 +101,14 @@ final class UpdateCoordinator {
         // Closing the service is this coordinator's own step of an installation in progress.
         guard phase != .closing, phase != .authorized else { return }
         host = nil
+        let ended = endingService
+        endingService = false
+        // A service ended for an update that is no longer pending must not stay down. One that
+        // failed on its own is not restarted here, so a broken release cannot restart in a loop.
+        if ended, install == nil {
+            if !quitting { restartService?() }
+            return
+        }
         serviceFailed = true
         progress()
     }
@@ -304,7 +316,10 @@ final class UpdateCoordinator {
         }
     }
     var mayTerminateForUpdate: Bool { phase == .authorized && cleanServiceExit }
-    func ordinaryQuit() { stop(state: enabled ? "idle" : "disabled") }
+    func ordinaryQuit() {
+        quitting = true
+        stop(state: enabled ? "idle" : "disabled")
+    }
     func cycleFinished(error: Error?, upToDate: Bool = false) {
         manualCheck = false
         let wasClosing = phase == .closing || phase == .authorized || cleanServiceExit
@@ -340,7 +355,7 @@ final class UpdateCoordinator {
             status.blockers = []
             // A service ended for this update, or one that failed, must not stay down because
             // the update did not install.
-            if serviceFailed {
+            if serviceFailed, !quitting {
                 serviceFailed = false
                 restartService?()
             }
@@ -361,7 +376,7 @@ final class UpdateCoordinator {
     private func stop(state: String) {
         generation = UUID()
         let old = phase
-        if old == .closing {
+        if old == .closing, !quitting {
             // The service was told to exit for this installation, which is not going ahead.
             host = nil
             serviceFailed = false
@@ -409,6 +424,7 @@ final class UpdateCoordinator {
     /// ServiceHost's own deadlines. Its exit reaches `serviceUnavailable`, which installs.
     private func endService(_ host: ServiceHost) {
         if self.host === host { self.host = nil }
+        endingService = true
         phase = .waiting
         fence(false)
         if let endService {

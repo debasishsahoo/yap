@@ -49,9 +49,6 @@ final class AppSocket: @unchecked Sendable {
         // its answer is written can never raise SIGPIPE, however quickly it leaves.
         var noSignal: Int32 = 1
         setsockopt(listener, SOL_SOCKET, SO_NOSIGPIPE, &noSignal, socklen_t(MemoryLayout<Int32>.size))
-        // A caller that stops reading cannot hold a writer past this.
-        var sendDeadline = timeval(tv_sec: 5, tv_usec: 0)
-        setsockopt(listener, SOL_SOCKET, SO_SNDTIMEO, &sendDeadline, socklen_t(MemoryLayout<timeval>.size))
         let length = socklen_t(MemoryLayout<sockaddr_un>.size)
         let result = withUnsafePointer(to: &address) {
             $0.withMemoryRebound(to: sockaddr.self, capacity: 1) { bind(listener, $0, length) }
@@ -112,8 +109,11 @@ final class AppSocket: @unchecked Sendable {
     private func serve(_ client: Int32) {
         // An accepted socket inherits the listener's non-blocking mode; reads here block, bounded.
         _ = fcntl(client, F_SETFL, fcntl(client, F_GETFL) & ~O_NONBLOCK)
+        // Bounds a caller that stalls sending its request or stops reading the answer. Accepted
+        // sockets do not inherit these from the listener, unlike SO_NOSIGPIPE.
         var deadline = timeval(tv_sec: 5, tv_usec: 0)
         setsockopt(client, SOL_SOCKET, SO_RCVTIMEO, &deadline, socklen_t(MemoryLayout<timeval>.size))
+        setsockopt(client, SOL_SOCKET, SO_SNDTIMEO, &deadline, socklen_t(MemoryLayout<timeval>.size))
         queue.async { [self] in
             guard let line = readLine(client) else {
                 // Nothing arrived (a probe that hung up, or a stalled caller): nothing to answer.

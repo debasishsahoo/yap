@@ -426,3 +426,33 @@ test("refusals count only when consecutive from the same service", (t) => {
     ["cancel,cancel,cancel"],
   );
 });
+
+test("a service ended for an update is restarted even when the cycle ends before it has exited", (t) => {
+  const stubborn = peer
+    .replace(
+      "if (request.operation === 'update.prepare') permit = 'permit';",
+      "if (request.operation === 'update.prepare') return;",
+    )
+    .replace(".on('close',()=>process.exit(0))", ".on('close',()=>setInterval(()=>{},1000))");
+  assert.deepEqual(
+    run(
+      t,
+      `
+ owner.restartService = { trace.append("restart") }
+ blockers = []
+ owner.ready(install: { trace.append("install") }, cancel: { trace.append("cancel"); owner.cycleFinished(error: nil) })
+ try? await Task.sleep(for: .milliseconds(100))
+ blockers = ["native.capture"]
+ // The permit request times out and the service is being ended, slowly: it ignores EOF.
+ try? await Task.sleep(for: .milliseconds(1500))
+ owner.setEnabled(false)
+ // The old process exits about four seconds after EOF, when it is terminated.
+ for _ in 0..<800 { if trace.contains("restart") { break }; try? await Task.sleep(for: .milliseconds(10)) }
+ try? await Task.sleep(for: .milliseconds(200))
+ print(trace.joined(separator:","))
+ `,
+      stubborn,
+    ),
+    ["cancel,restart"],
+  );
+});
