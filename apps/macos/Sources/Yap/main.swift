@@ -183,20 +183,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func startAdminNotices() {
         let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? ""
         let saved = URL(fileURLWithPath: (personalRoot() as NSString).appendingPathComponent("notice.json"))
-        if let data = try? Data(contentsOf: saved),
+        if let data = try? Data(contentsOf: saved), data.count <= AdminNotice.maxFeedBytes,
             let cached = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
             cached["version"] as? String == version
         {
-            controls?.showAdminMessage(cached["message"] as? String)
+            controls?.showAdminMessage((cached["message"] as? String).map { String($0.prefix(AdminNotice.maxMessageCharacters)) })
         }
+        // Bounds the whole fetch, not just its idle time, so a slow server cannot hold one open.
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.timeoutIntervalForRequest = 15
+        configuration.timeoutIntervalForResource = 30
+        let session = URLSession(configuration: configuration)
         let refresh = { [weak self] in
             var request = URLRequest(url: AdminNotice.feed, cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: 15)
             request.setValue("Yap/\(version)", forHTTPHeaderField: "User-Agent")
-            URLSession.shared.dataTask(with: request) { data, response, _ in
-                guard let data, (response as? HTTPURLResponse)?.statusCode == 200,
-                    (try? JSONSerialization.jsonObject(with: data)) is [String: Any]
-                else { return }
-                let message = AdminNotice.message(from: data, version: version)
+            session.dataTask(with: request) { data, response, _ in
+                guard let data, (response as? HTTPURLResponse)?.statusCode == 200 else { return }
+                let message: String?
+                switch AdminNotice.lookup(in: data, version: version) {
+                case .unreadable: return
+                case .none: message = nil
+                case .message(let text): message = text
+                }
                 let record: [String: Any] = ["version": version, "message": message as Any? ?? NSNull()]
                 if let encoded = try? JSONSerialization.data(withJSONObject: record) {
                     try? FileManager.default.createDirectory(

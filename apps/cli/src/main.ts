@@ -237,8 +237,16 @@ function showAdminNotice() {
     const saved = JSON.parse(
       readFileSync(join(personalHome(process.env), "notice.json"), "utf8"),
     ) as { version?: unknown; message?: unknown };
-    if (saved.version === version && typeof saved.message === "string" && saved.message)
-      process.stderr.write(`Yap notice: ${saved.message.replace(/\s+/g, " ").slice(0, 2000)}\n`);
+    if (saved.version !== version || typeof saved.message !== "string") return;
+    // Control characters could steer a terminal; the app already bounds the length.
+    const message = saved.message
+      .slice(0, 500)
+      .replace(/[\u0000-\u001f\u007f-\u009f\s]+/g, " ")
+      .trim();
+    if (!message) return;
+    // A closed stderr must not turn a notice into a crash.
+    process.stderr.once("error", () => {});
+    process.stderr.write(`Yap notice: ${message}\n`);
   } catch {}
 }
 

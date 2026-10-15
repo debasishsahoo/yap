@@ -97,8 +97,8 @@ test("the site publishes the admin notice feed the app reads", () => {
   const feed = JSON.parse(built()("notices.json"));
   assert.ok(Array.isArray(feed.notices));
   for (const notice of feed.notices) {
+    // Patterns are ICU regular expressions, checked by the app; one it cannot compile is skipped.
     assert.equal(typeof notice.versions, "string");
-    assert.ok(new RegExp(notice.versions));
     assert.equal(typeof notice.message, "string");
   }
 });

@@ -136,7 +136,6 @@ final class CaptureView: NSView {
         let text = NSTextField(wrappingLabelWithString: message)
         text.font = .systemFont(ofSize: 12, weight: .medium)
         text.textColor = .labelColor
-        text.isSelectable = true
         let textWidth = width - inset * 3 - icon
         let measured = text.cell?.cellSize(forBounds: NSRect(x: 0, y: 0, width: textWidth, height: .greatestFiniteMagnitude)) ?? .zero
         let height = max(icon, ceil(measured.height)) + inset * 2
@@ -146,12 +145,11 @@ final class CaptureView: NSView {
         banner.layer?.backgroundColor = NSColor.systemOrange.withAlphaComponent(0.18).cgColor
         banner.layer?.borderColor = NSColor.systemOrange.withAlphaComponent(0.55).cgColor
         banner.layer?.borderWidth = 1
-        banner.setAccessibilityElement(true)
-        banner.setAccessibilityLabel("Message from the Yap team: \(message)")
         // The banner draws bottom-up; the icon sits beside the first line of the message.
         let symbol = NSImageView(frame: NSRect(x: inset, y: height - inset - icon - 1, width: icon, height: icon))
         symbol.image = NSImage(systemSymbolName: "exclamationmark.triangle.fill", accessibilityDescription: nil)
         symbol.contentTintColor = .systemOrange
+        symbol.setAccessibilityLabel("Message from the Yap team")
         banner.addSubview(symbol)
         text.frame = NSRect(x: inset * 2 + icon, y: inset, width: textWidth, height: ceil(measured.height))
         banner.addSubview(text)

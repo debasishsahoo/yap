@@ -32,8 +32,11 @@ what to do when something has gone wrong, such as "back up your library" or
 "reinstall from justyap.io". The app fetches it at launch and hourly, shows the first
 notice whose `versions` regular expression matches its version in the menu and in
 Settings, and saves it so the command line prints it on stderr. Anchor patterns, as
-in `^0\.1\.4[01]$`. The app ignores a missing, unreadable or malformed file, so a
-mistake here can hide a notice but never breaks the app.
+in `^0\.1\.4[01]$`. Patterns are ICU regular expressions
+(`NSRegularExpression`); a notice whose pattern the app cannot compile, or whose
+message is blank, is skipped, and messages are cut to 500 characters. A missing,
+unreadable or wrongly shaped file changes nothing, so a mistake here can leave the
+current notice up or hide a new one, but never breaks the app.
 
 ```json
 { "notices": [{ "versions": "^0\\.1\\.4[01]$", "message": "Reinstall Yap from justyap.io." }] }

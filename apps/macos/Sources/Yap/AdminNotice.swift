@@ -5,21 +5,37 @@ import Foundation
 /// any failure to fetch or read it leaves the app exactly as it was.
 enum AdminNotice {
     static let feed = URL(string: "https://justyap.io/notices.json")!
+    /// A feed is a short list; anything larger is not one.
+    static let maxFeedBytes = 64 * 1024
+    /// Long enough for instructions, short enough to lay out cheaply on every panel update.
+    static let maxMessageCharacters = 500
 
-    /// The first notice whose `versions` pattern matches `version`, or nil. A notice with an
-    /// invalid pattern or an empty message is skipped; anything else unreadable means no notice.
-    static func message(from data: Data, version: String) -> String? {
-        guard let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-            let notices = root["notices"] as? [[String: Any]]
-        else { return nil }
-        for notice in notices {
+    enum Lookup: Equatable {
+        /// Not a notice feed: keep whatever is showing.
+        case unreadable
+        /// A feed with nothing for this version: show nothing.
+        case none
+        case message(String)
+    }
+
+    /// The first notice whose `versions` pattern matches `version`. A notice with an invalid
+    /// pattern or a blank message is skipped; data that is not a feed is `unreadable`.
+    static func lookup(in data: Data, version: String) -> Lookup {
+        guard data.count <= maxFeedBytes,
+            let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+            let notices = root["notices"] as? [Any]
+        else { return .unreadable }
+        for case let notice as [String: Any] in notices {
             guard let pattern = notice["versions"] as? String,
-                let message = notice["message"] as? String, !message.isEmpty,
+                let raw = notice["message"] as? String,
+                case let message = raw.trimmingCharacters(in: .whitespacesAndNewlines), !message.isEmpty,
                 let regex = try? NSRegularExpression(pattern: pattern)
             else { continue }
             let whole = NSRange(version.startIndex..., in: version)
-            if regex.firstMatch(in: version, range: whole) != nil { return message }
+            if regex.firstMatch(in: version, range: whole) != nil {
+                return .message(String(message.prefix(maxMessageCharacters)))
+            }
         }
-        return nil
+        return .none
     }
 }
