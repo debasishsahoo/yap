@@ -6,6 +6,13 @@ The capture menu keeps its dark appearance after selecting a recording area and
 shows the latest recording below the action buttons with Play and Copy agent prompt
 actions. Screen recordings now include the pointer in the captured video.
 
+## 0.1.45
+
+The Yap team can now show a message to specific versions, for when something has
+gone wrong and you need to know what to do. It appears as a banner at the top of
+the menu, at the top of Settings, and on the command line's stderr. Yap fetches it
+from justyap.io at launch and hourly; if that fails, nothing else changes.
+
 ## 0.1.44
 
 Hardens the 0.1.43 updater: quitting never restarts the service, a service that
