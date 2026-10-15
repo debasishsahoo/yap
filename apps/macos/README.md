@@ -59,11 +59,19 @@ normal operations and preview renewals usable. The [Sparkle boundary](Sources/Ya
 owns scheduling and preferences through the pinned SDK. Its acknowledged launch
 exclusion permits clean service EOF, and observed clean exit permits replacement.
 An authenticated check that finds no newer version completes normally; a fresh
-check clears prior check errors and candidate facts, while a required manual
-restart remains visible.
+check clears prior check errors and candidate facts. Released apps check hourly,
+so a cycle that fails is retried within the hour.
 Updater shutdown never finalizes capture, closes preview or sends a signal to
-manufacture idle. An unconfirmed permit release or stalled shutdown requires an
-explicit quit and reopen; there is no competing successor or automatic restart loop.
+manufacture idle. The update is how a broken service gets fixed, so no service
+failure may hold it: a service that fails to start, cannot answer the permit
+request or refuses it three cycles running is ended, and the update installs once
+native work is idle. A release the app cannot confirm, or an installation that
+stops after the service exited, restarts the service, which settles any permit it
+held. Each restart answers one such event; none needs a quit and reopen.
+
+The app answers its own operations (`update.*`, `skill.*`, `cli.*`, `login.*`) on
+its [own socket](Sources/Yap/AppSocket.swift) beside the service's, with the
+handlers Settings uses, so the command line keeps them while the service is down.
 Updater relaunch preserves the selected home/defaults and suppresses launch Settings.
 
 The [library controller](Sources/Yap/LibraryController.swift) presents

@@ -227,8 +227,9 @@ The [release notes](scripts/release-notes.md) describe release limitations and
 link to agent setup. Built binaries are release assets;
 source control retains their reproducible inputs rather than generated app bundles.
 
-Version tags trigger a verified GitHub release. The [build and release guide](scripts/README.md)
-explains version ownership, CI hooks and personal source installs.
+Releases are built, signed and published to GitHub from a local Apple Silicon Mac. The
+[build and release guide](scripts/README.md) explains version ownership, CI hooks and personal
+source installs.
 
 ## Contributing
 

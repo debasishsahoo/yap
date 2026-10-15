@@ -123,7 +123,10 @@ framework override must match its pinned build receipt. Source builds link the
 same SDK but have no feed or public update key. Only release packaging enables
 updates and derives compatibility metadata from core. The fixed
 [launcher](launcher/main.c) holds shared kernel exclusion before any bundled code
-read and until the CLI process ends. Its lock follows the passwd account home,
+read and until the CLI process ends. It names the lock's descriptor and path to
+Node, because a `yap mcp` session lives as long as its agent: the session releases
+the lock once started (its code is loaded by then) and takes it again for each
+call, and it exits after a call that finds a newer version installed. Its lock follows the passwd account home,
 matching Sparkle even when `HOME`
 selects another default app location. The account lock persists across bundle
 replacement; neither launcher nor updater may unlink it. Neither is a notarization
@@ -182,7 +185,8 @@ product acceptance.
 
 The [launcher lifetime lab](launcher-lab.mjs) is a disposable concurrency proof,
 not an installer. It shows why selecting Node and then reading a mutable app path
-needs exclusion covering the whole CLI process, including an idle MCP session.
+needs exclusion for as long as a CLI process reads the app; an idle MCP session
+reads nothing, so it holds the lock only while a call runs.
 Its lock wrapper is research input until the updater's post-exit installation
 owner is proved; a passing lab is not installed-update acceptance.
 

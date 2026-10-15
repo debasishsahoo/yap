@@ -156,14 +156,14 @@ point it applies to the successor. The update does not edit skill files itself;
 with skill maintenance on, the relaunched app refreshes the global skill through
 the skill lifecycle.
 
-Read advertised `service.health` update state and errors literally. `UPDATING`
-is a retryable installation fence; retry after relaunch, following the operation's
-write-identity contract. `UPDATE_RESTART_REQUIRED` or `UPDATE_SHUTDOWN_FAILED`
-requires ordinary user quit and reopen. A shutdown failure after the service pipe
-closes can leave the service unavailable; it does not imply the old service
-reopened. Do not force-kill a closing child, launch a competing service or replay
-an uncertain mutation. Reopen only after the existing app and child have exited,
-within the user's request.
+Read advertised update state and errors literally. `update.*`, `skill.*`, `cli.*`
+and `login.*` are answered by the app itself, so they work while `service.health`
+fails. `UPDATING` is a retryable installation fence; retry after relaunch,
+following the operation's write-identity contract. `UPDATE_FAILED` or
+`UPDATE_SHUTDOWN_FAILED` reports a cycle that stopped: the app restarts its
+service if it had closed it, and retries the update within the hour. Do not
+force-kill a closing child, launch a competing service or replay an uncertain
+mutation.
 
 If an installed update cannot start, retain the reported failure and use the same
 verified download/install procedure for a specifically chosen previous release

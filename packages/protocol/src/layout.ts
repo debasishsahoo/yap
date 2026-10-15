@@ -7,12 +7,12 @@ export function personalHome(environment: NodeJS.ProcessEnv = process.env): stri
   return override ? resolve(override) : join(homedir(), ".yap");
 }
 
-/** The private directory a running service owns inside a personal root. */
+/** The private directory inside a personal root where the service and the app listen. */
 export function serviceRuntimeDirectory(home: string): string {
   return join(home, "run");
 }
 
-/** The one socket a runtime directory holds. */
+/** The service's socket in a runtime directory. */
 export function serviceSocketPath(runtimeDirectory: string): string {
   return join(runtimeDirectory, "service.sock");
 }

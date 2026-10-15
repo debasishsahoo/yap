@@ -3,7 +3,10 @@
 CLI is the primary agent interface. An MCP client can instead invoke the installed
 `yap` launcher with `mcp` as its argument. Both expose the same operation
 registry, revision rules and durable retry identities; MCP setup is not required
-for CLI use.
+for CLI use. A session holds the app's installation lock only during a call, so it
+never blocks an update; a call made while an update installs returns retryable
+`UPDATING`, and after an update the session exits so the client starts it again
+on the new version.
 
 MCP tool names are the operation names. When advertised, `transcript.review` and
 `cursor.render` therefore have the same schemas and retry/readiness behavior as
