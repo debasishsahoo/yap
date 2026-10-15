@@ -242,6 +242,8 @@ final class PreviewWindow: NSObject, PreviewPresenting, NSWindowDelegate {
             }
             try composedPicture.insertTimeRange(pictureTrack.timeRange, of: pictureTrack, at: .zero)
             try composedVoice.insertTimeRange(voiceTrack.timeRange, of: voiceTrack, at: .zero)
+            // Closed while the tracks were loading: nothing may start playing now.
+            guard !Task.isCancelled else { return }
             let item = AVPlayerItem(asset: composition)
             self?.playerObservation = item.observe(\.status, options: [.new]) { item, _ in
                 guard item.status == .failed else { return }
@@ -281,8 +283,13 @@ final class PreviewWindow: NSObject, PreviewPresenting, NSWindowDelegate {
         exportAction = nil
     }
 
+    /// A closed window never keeps playing, whoever opened it: a Library recording has no owner
+    /// that would stop it.
     func windowWillClose(_ notification: Notification) {
         guard notification.object as? NSWindow === window else { return }
+        compositionTask?.cancel()
+        playerView?.player?.pause()
+        playerView?.player?.replaceCurrentItem(with: nil)
         onClose?()
     }
 

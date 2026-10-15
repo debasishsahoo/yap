@@ -77,3 +77,60 @@ import AVKit
     }
   },
 );
+
+test("closing a recording's window stops its playback", { timeout: 120_000 }, () => {
+  const scratch = mkdtempSync(join(tmpdir(), "yap-preview-close-"));
+  try {
+    const clip = join(scratch, "clip.mp4");
+    execFileSync("ffmpeg", [
+      "-v",
+      "error",
+      "-f",
+      "lavfi",
+      "-i",
+      "testsrc2=size=320x180:rate=30",
+      "-f",
+      "lavfi",
+      "-i",
+      "sine=frequency=440",
+      "-t",
+      "5",
+      "-pix_fmt",
+      "yuv420p",
+      "-shortest",
+      clip,
+    ]);
+    const executable = compileControlsCheck(
+      scratch,
+      ["PreviewController", "PreviewWindow"],
+      String.raw`
+import AppKit
+import AVKit
+@main struct Check {
+    @MainActor static func main() {
+        NSApplication.shared.setActivationPolicy(.prohibited)
+        let preview = PreviewWindow()
+        preview.playLocalFile(title: "Recording", file: CommandLine.arguments[1], mediaType: "video/mp4")
+        guard let window = NSApp.windows.first(where: { $0.title == "Recording" }),
+              let view = window.contentView?.subviews.first(where: { $0 is AVPlayerView }) as? AVPlayerView,
+              let player = view.player else { preconditionFailure("The recording plays in a window") }
+        RunLoop.current.run(until: Date().addingTimeInterval(0.5))
+        precondition(player.rate > 0, "The recording is playing")
+        window.performClose(nil)
+        RunLoop.current.run(until: Date().addingTimeInterval(0.3))
+        precondition(player.rate == 0 && player.currentItem == nil, "Closing the window stops the recording's sound")
+        print("ok")
+    }
+}
+`,
+    );
+    const out = execFileSync(executable, [clip], {
+      encoding: "utf8",
+      timeout: 30_000,
+      env: { ...process.env, YAP_FIXTURE_CONTROLS: "1" },
+    });
+    assert.equal(out.trim(), "ok");
+  } finally {
+    rmSync(scratch, { recursive: true, force: true });
+  }
+});
