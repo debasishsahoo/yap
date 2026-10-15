@@ -70,6 +70,10 @@ the mechanics; the archived document owns the reasons and explicit evidence limi
 route: the agent places the app, and the app installs and keeps current the `yap`
 command, the skill and the PATH line. It is built and awaiting its release-day checks.
 
+[Faster project previews](preview-speed/README.md) is a placeholder: what the owner's
+projects show about preview cost, the measurement that comes next, and the candidate
+approaches it will choose between.
+
 ## Future proposals
 
 These directories hold planning questions, not unfinished implementation slices.
