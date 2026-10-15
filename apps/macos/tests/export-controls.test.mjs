@@ -294,8 +294,10 @@ import YapControls
         let originalProject = try JSONDecoder().decode(ExportsState.Record.self, from: script.json(project))
         precondition(exports.state.records == [originalRecording, originalProject], "Controller retains all public receipt fields")
         let projectOwner = project["projectId"] as! String
-        let detail = "Revision \(originalProject.revisionId) of project \(projectOwner)"
-        precondition(exportLines(exports).contains { $0 == detail }, "Presentation names the actual project owner")
+        // The record keeps its owner (checked above); what people read names the file, never identifiers.
+        precondition(originalProject.target == .project(projectOwner), "The export stays attributed to its project")
+        precondition(!exportLines(exports).contains { $0.contains(projectOwner) || $0.contains(originalProject.revisionId) },
+                     "Presentation shows no identifiers")
         precondition(exportLines(exports).contains { $0.contains("Unreadable export status for malformed") },
             "Discovery failure is visible in shared export facts")
 

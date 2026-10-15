@@ -158,7 +158,7 @@ final class RecordingControls: NSObject {
         }
         let revisionId = params["revisionId"] as? String
         let range = params["range"] as? [String: Any]
-        preview.open(projectId, revisionId: revisionId, range: range)
+        preview.open(projectId, revisionId: revisionId, range: range, title: params["title"] as? String)
         let payload: [String: Any] = [
             "opened": true,
             "projectId": projectId,

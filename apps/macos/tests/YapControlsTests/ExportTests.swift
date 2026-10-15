@@ -44,7 +44,9 @@ func runExportTests() {
     exports.unanswered("e1", reason: "TIMEOUT: export.create did not answer in time")
     let pending = exportItems(state, exports)
     precondition(ExportPresentation.title(for: exports) == "Exports — needs attention", "An unconfirmed request needs attention")
-    precondition(pending.first?.title == "Video — demo.mp4 — not confirmed", "The request says it is unconfirmed")
+    precondition(pending.first?.title == "demo.mp4" && pending.first?.status == "not confirmed"
+                 && pending.first?.details.first?.hasPrefix("Video · ") == true && pending.first?.attention == true,
+                 "The request names its file, says once that it is unconfirmed, and asks for attention")
     precondition(entry(pending, "export.resend.e1")?.enabled == true
         && entry(pending, "export.abandon.e1")?.enabled == true,
         "An unconfirmed request can be sent again or abandoned")
@@ -61,8 +63,8 @@ func runExportTests() {
     exports.admit(record("e1", state: "queued"))
     precondition(exports.requests.isEmpty && exports.records.map(\.exportId) == ["e1"], "Admitted exports are records")
     precondition(ExportPresentation.title(for: exports) == "Exports — 1 in progress", "Queued work is in progress")
-    precondition(exportItems(state, exports).first?.title == "Video — demo.mp4 — waiting",
-        "A queued export waits")
+    precondition(exportItems(state, exports).first.map { $0.title == "demo.mp4" && $0.status == "waiting" && !$0.attention } == true,
+        "A queued export waits, without asking for attention")
     precondition(entry(exportItems(state, exports), "export.abandon.e1")?.enabled == true,
         "An unfinished export can be abandoned")
     precondition(entry(exportItems(state, exports), "export.retry.e1") == nil,
@@ -96,8 +98,8 @@ func runExportTests() {
     precondition(entry(committed, "export.retry.e1")?.title == "Retry Cleanup", "Retrying a commit only cleans up")
     precondition(entry(committed, "export.abandon.e1") == nil, "A committed export is not offered for abandonment")
     precondition(entry(committed, "export.dismiss.e1") == nil, "Pending cleanup cannot be dismissed")
-    precondition(committed.contains { $0.title == "Video — demo.mp4 — exported, cleanup pending" },
-        "Cleanup does not hide that the export committed")
+    precondition(committed.contains { $0.title == "demo.mp4" && $0.status == "exported, cleanup pending" && $0.attention },
+        "Cleanup does not hide that the export committed, and needs attention")
     precondition(exports.observed.contains("e1"), "Pending cleanup is still observed")
     exports.update(record("e1", state: "committed", output: "/Users/me/Exports/demo.mp4"))
     precondition(!exports.observed.contains("e1"), "A clean commit is no longer polled")
@@ -137,7 +139,7 @@ func runExportTests() {
         var audio = ExportsState()
         audio.admit(record)
         let delivered = exportItems(ready(), audio)
-        precondition(delivered.first?.title == "Audio — " + leaf + " — failed")
+        precondition(delivered.first.map { $0.title == leaf && $0.status == "failed" && $0.details.first?.hasPrefix("Audio · ") == true && $0.attention } == true)
         precondition(entry(delivered, "export.retry.audio-" + leaf)?.enabled == true)
     }
     for kind in ["srt", "vtt"] {
@@ -156,7 +158,7 @@ func runExportTests() {
         var captions = ExportsState()
         captions.update(record)
         let delivered = exportItems(ready(), captions)
-        precondition(delivered.first?.title == "Captions — captions." + kind + " — failed")
+        precondition(delivered.first.map { $0.title == "captions." + kind && $0.status == "failed" && $0.details.first?.hasPrefix("Captions · ") == true && $0.attention } == true)
         precondition(entry(delivered, "export.retry.captions-" + kind)?.enabled == true)
         precondition(entry(delivered, "export.abandon.captions-" + kind)?.enabled == true)
         precondition(captions.beginChoice(target: .project("p"), kind: record.kind) == nil,

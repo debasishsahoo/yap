@@ -2103,3 +2103,34 @@ test("a persisted queued voice request reaches its initialized owner after start
       },
     });
 });
+
+test("an agent's inspect.open hands the app the project's name for its preview window", async () => {
+  const f = await projectServiceControlFixture(cleanups, async () => ({ ok: true, data: {} }));
+  const forwarded: Record<string, unknown>[] = [];
+  f.events.on("call", ({ request }) => {
+    if (request.operation === "inspect.open") forwarded.push(request.params);
+    f.input.write(
+      JSON.stringify({
+        event: "result",
+        response: { id: request.id, ok: true, data: { opened: true } },
+      }) + "\n",
+    );
+  });
+  const created = await f.call("project.create", {
+    requestId: "named",
+    title: "Launch video",
+    canvas: {
+      width: 64,
+      height: 32,
+      fps: { numerator: 30, denominator: 1 },
+      background: "#000000ff",
+    },
+  });
+  if (!created.ok) throw new Error(JSON.stringify(created));
+  const projectId = (created.data as { project: { projectId: string } }).project.projectId;
+  expect(await f.call("inspect.open", { projectId })).toMatchObject({
+    ok: true,
+    data: { native: { opened: true } },
+  });
+  expect(forwarded).toMatchObject([{ projectId, title: "Launch video" }]);
+});

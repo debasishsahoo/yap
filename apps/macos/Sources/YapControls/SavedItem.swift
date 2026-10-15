@@ -22,6 +22,8 @@ public struct SavedItem: Equatable, Sendable {
     public let status: String?
     public let details: [String]
     public let actions: [PresentedControlsAction]
+    /// Something about this item needs the person: a failure, an unconfirmed request, a retry.
+    public let attention: Bool
     /// The action clicking the row performs (playing a recording, previewing a project), if any.
     private let opens: ControlsAction?
     /// The row's open action while it is offered and enabled; the row is clickable only then.
@@ -31,7 +33,7 @@ public struct SavedItem: Equatable, Sendable {
     }
     public init(id: String, kind: Kind, title: String, status: String? = nil,
                 details: [String] = [], actions: [PresentedControlsAction] = [],
-                opens: ControlsAction? = nil) {
+                opens: ControlsAction? = nil, attention: Bool = false) {
         self.id = id
         self.kind = kind
         self.title = title
@@ -39,6 +41,7 @@ public struct SavedItem: Equatable, Sendable {
         self.details = details
         self.actions = actions
         self.opens = opens
+        self.attention = attention
     }
 }
 

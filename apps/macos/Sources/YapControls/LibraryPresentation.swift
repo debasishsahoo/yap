@@ -14,11 +14,12 @@ public enum LibraryPresentation {
         let takes = state.library.recent + state.library.deletions.values.compactMap(\.take)
             .filter { pending in !state.library.recent.contains { $0.recordingId == pending.recordingId } }
             .sorted { $0.recordingId < $1.recordingId }
-        let actions: [PresentedControlsAction] = [
-            .init(.previousRecordings, "Previous", enabled: state.service == .ready && state.library.hasPreviousRecordingPage && !state.library.recordingsRefreshing),
-            .init(.nextRecordings, "Next", enabled: state.service == .ready && state.library.nextRecordingCursor != nil && !state.library.recordingsRefreshing),
-            .init(.refreshLibrary, "Refresh", enabled: state.service == .ready && !state.library.recordingsRefreshing),
-        ]
+        // Paging is offered only where another page exists; a refresh disables it without hiding it.
+        let actions: [PresentedControlsAction] = [PresentedControlsAction?](arrayLiteral:
+            state.library.hasPreviousRecordingPage ? .init(.previousRecordings, "Previous", enabled: state.service == .ready && !state.library.recordingsRefreshing) : nil,
+            state.library.nextRecordingCursor != nil ? .init(.nextRecordings, "Next", enabled: state.service == .ready && !state.library.recordingsRefreshing) : nil,
+            .init(.refreshLibrary, "Refresh", enabled: state.service == .ready && !state.library.recordingsRefreshing)
+        ).compactMap { $0 }
         var notices: [SavedItem] = []
         if let failure = state.library.recordingFailure { notices.append(.init(id: "recordings.failure", kind: .message, title: "Recordings unavailable — \(failure)")) }
         if let failure = state.library.progressFailure { notices.append(.init(id: "recordings.progress", kind: .message, title: "Preparation status unavailable — \(failure)")) }
@@ -43,7 +44,7 @@ public enum LibraryPresentation {
                 status: status, details: details, actions: [
                     .init(.playRecording(take.recordingId), "Play", enabled: state.service == .ready && !pending && take.state != "canceled"),
                     .init(.copyRecordingPrompt(take.recordingId), "Copy agent prompt", enabled: !pending),
-                ], opens: .playRecording(take.recordingId))
+                ], opens: .playRecording(take.recordingId), attention: status == "Attention")
         }, actions: actions)
     }
 
@@ -66,15 +67,17 @@ public enum LibraryPresentation {
         }
         for request in state.library.deletions.values.sorted(by: { $0.target.id < $1.target.id }) {
             guard case .project(let id) = request.target else { continue }
-            items.append(.init(id: id, kind: .project, title: request.title, status: request.isPending ? "Deleting" : "Attention", details: [
-                id, request.failure.map { "Delete not confirmed — \($0)" } ?? "Deleting…",
-            ], actions: [.init(.deleteProject(id), request.isPending ? "Deleting…" : "Retry Delete", enabled: state.service == .ready && !request.isPending)]))
+            items.append(.init(id: id, kind: .project, title: request.title, status: request.isPending ? "Deleting" : "Attention",
+                details: request.failure.map { ["Delete not confirmed — \($0)"] } ?? [],
+                actions: [.init(.deleteProject(id), request.isPending ? "Deleting…" : "Retry Delete", enabled: state.service == .ready && !request.isPending)],
+                attention: !request.isPending))
         }
         if state.library.projects.isEmpty && items.isEmpty { items.append(.init(id: "projects.empty", kind: .message, title: "No projects on this page.")) }
-        return .init(items: items, actions: [
-            .init(.previousProjects, "Previous", enabled: state.service == .ready && state.library.hasPreviousProjectPage && !state.library.projectsRefreshing),
-            .init(.nextProjects, "Next", enabled: state.service == .ready && state.library.nextProjectCursor != nil && !state.library.projectsRefreshing),
-        ])
+        // Paging is offered only where another page exists; a refresh disables it without hiding it.
+        return .init(items: items, actions: [PresentedControlsAction?](arrayLiteral:
+            state.library.hasPreviousProjectPage ? .init(.previousProjects, "Previous", enabled: state.service == .ready && !state.library.projectsRefreshing) : nil,
+            state.library.nextProjectCursor != nil ? .init(.nextProjects, "Next", enabled: state.service == .ready && !state.library.projectsRefreshing) : nil
+        ).compactMap { $0 })
     }
 
     public static func recordingTitle(of take: ControlsState.RecentTake) -> String {

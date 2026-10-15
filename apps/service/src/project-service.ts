@@ -2534,6 +2534,8 @@ export async function startProjectService(options: {
             if (controller) {
               const answer = await controller.call("inspect.open", {
                 projectId: params.projectId,
+                // The preview window is titled by the project's name, not its identifier.
+                title: project.title,
                 revisionId: revision.id,
                 ...(params.range === undefined ? {} : { range: params.range }),
               });

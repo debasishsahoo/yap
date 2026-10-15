@@ -125,6 +125,8 @@ final class PreviewWindow: NSObject, PreviewPresenting, NSWindowDelegate {
             let pills = NSStackView()
             pills.orientation = .horizontal
             pills.spacing = 4
+            pills.setAccessibilityElement(true)
+            pills.setAccessibilityRole(.radioGroup)
             for (offset, item) in items.enumerated() {
                 let pill = PreviewPill(title: item.label, style: offset == index ? .selected : .plain)
                 pill.toolTip = item.operation
@@ -308,7 +310,10 @@ final class PreviewPill: NSButton {
         self.title = title
         isBordered = false
         setButtonType(.momentaryChange)
-        setAccessibilityValue(style == .selected ? "selected" : nil)
+        if style != .prominent {
+            setAccessibilityRole(.radioButton)
+            setAccessibilityValue(NSNumber(value: style == .selected))
+        }
         let width = (title as NSString).size(withAttributes: [.font: Self.font]).width + (symbol == nil ? 24 : 42)
         widthAnchor.constraint(equalToConstant: ceil(width)).isActive = true
         heightAnchor.constraint(equalToConstant: 26).isActive = true

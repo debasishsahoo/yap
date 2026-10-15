@@ -22,20 +22,21 @@ public enum ExportPresentation {
     }
     private static func requestItem(_ request: ExportsState.Request, exports: ExportsState, ready: Bool) -> SavedItem {
         let acting = exports.acting[request.exportId]
-        var details = [path(request.directory, request.leaf), "Revision \(request.revisionId) of \(targetTitle(request.target))"]
+        var details = ["\(kindTitle(request.kind)) · \(path(request.directory, request.leaf))"]
         if let reason = request.unconfirmed { details.append("Request not confirmed — \(reason)") }
         if let failure = exports.failures[request.exportId] { details.append(failure) }
         if let failure = exports.readFailures[request.exportId] { details.append(failure) }
         let actionable = ready && request.unconfirmed != nil && acting == nil
         let status = request.unconfirmed == nil ? "sending…" : "not confirmed"
-        return .init(id: request.exportId, kind: .export, title: "\(kindTitle(request.kind)) — \(request.leaf) — \(status)", status: status, details: details, actions: [
+        let attention = request.unconfirmed != nil || exports.failures[request.exportId] != nil || exports.readFailures[request.exportId] != nil
+        return .init(id: request.exportId, kind: .export, title: request.leaf, status: status, details: details, actions: [
             .init(.resendExport(request.exportId), "Send Export Again", enabled: actionable),
             .init(.abandonExport(request.exportId), acting == .abandon ? "Abandoning…" : "Abandon Export", enabled: actionable),
-        ])
+        ], attention: attention)
     }
     private static func recordItem(_ record: ExportsState.Record, exports: ExportsState, ready: Bool) -> SavedItem {
         let acting = exports.acting[record.exportId]
-        var details = [record.output ?? path(record.directory, record.leaf), "Revision \(record.revisionId) of \(targetTitle(record.target))"]
+        var details = ["\(kindTitle(record.kind)) · \(record.output ?? path(record.directory, record.leaf))"]
         if let reason = record.reason { details.append(reason) }
         if let failure = exports.failures[record.exportId] { details.append(failure) }
         if let failure = exports.readFailures[record.exportId] { details.append(failure) }
@@ -51,10 +52,10 @@ public enum ExportPresentation {
         }
         if record.committed && record.settled { actions.append(.init(.dismissExport(record.exportId), "Remove from List", enabled: acting == nil)) }
         let status = stateTitle(record)
-        return .init(id: record.exportId, kind: .export, title: "\(kindTitle(record.kind)) — \(record.leaf) — \(status)", status: status, details: details, actions: actions)
-    }
-    private static func targetTitle(_ target: MediaTarget) -> String {
-        switch target { case .recording(let id): "recording \(id)"; case .project(let id): "project \(id)" }
+        // The same rule the Exports tab title uses for "needs attention", per row.
+        let attention = record.abandoning || record.cleanupPending || record.stopped
+            || exports.failures[record.exportId] != nil || exports.readFailures[record.exportId] != nil
+        return .init(id: record.exportId, kind: .export, title: record.leaf, status: status, details: details, actions: actions, attention: attention)
     }
     public static func stateTitle(_ record: ExportsState.Record) -> String {
         if record.abandoning { return "abandoning" }

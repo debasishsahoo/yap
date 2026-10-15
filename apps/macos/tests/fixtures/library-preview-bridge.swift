@@ -193,6 +193,8 @@ struct CheckFailure: Error, LocalizedError {
             var failures: [String] = []
             let preview = PreviewController(call: historical.call, presentation: presentation, now: { clock }, failure: { failures.append($0) })
             let owner = library(historical.call, preview)
+            // As the app does: the preview is titled by the name the Library holds for the project.
+            preview.projectTitle = { id in owner.state.projects.first { $0.projectId == id }?.title }
             owner.serviceChanged(ready: true); try await until { !owner.state.projectsRefreshing }
             try require(page(owner).isEmpty && owner.state.nextProjectCursor == nil, "Retained actual empty page must remain empty")
             historical.showProject = true; owner.refreshProjects(); try await until { !owner.state.projectsRefreshing }
@@ -204,7 +206,7 @@ struct CheckFailure: Error, LocalizedError {
             try require(requests.count == 2 && requests[0].isEqual(to: ["projectId": id]) && requests[1].isEqual(to: ["projectId": id, "revisionId": revision]),
                 "Historical preview request must retain the first returned revision")
             let movie = (ready["published"] as! [String: Any])["output"] as! [String: Any]
-            try require(presentation.movies == [["title": "Project preview", "file": movie["file"] as! String, "mediaType": movie["mediaType"] as! String]],
+            try require(presentation.movies == [["title": owner.state.projects.first { $0.projectId == id }!.title, "file": movie["file"] as! String, "mediaType": movie["mediaType"] as! String]],
                 "Historical ready receipt must dispatch its exact movie path and revision")
             preview.tick(); try await until { historical.calls.contains { $0["operation"] as? String == "project.get" } }
             try require(presentation.movies.count == 1 && failures.isEmpty, "Different actual historical head must not replace preview pin")

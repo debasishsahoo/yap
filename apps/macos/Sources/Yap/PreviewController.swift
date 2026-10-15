@@ -46,7 +46,9 @@ final class PreviewController {
     private var polling = false
     /// The project's name as people know it; its identifiers stay out of the window.
     var projectTitle: (String) -> String? = { _ in nil }
-    private func title(for target: MediaTarget) -> String { projectTitle(target.id) ?? "Project preview" }
+    /// A name the opener supplied, as an agent's inspect.open does for a project the Library may not hold.
+    private var givenTitle: String?
+    private func title(for target: MediaTarget) -> String { givenTitle ?? projectTitle(target.id) ?? "Project preview" }
 
     init(call: @escaping Call, presentation: any PreviewPresenting = PreviewWindow(),
         now: @escaping @MainActor () -> Date = Date.init, changed: @escaping () -> Void = {},
@@ -70,9 +72,10 @@ final class PreviewController {
         return self
     }
 
-    func open(_ projectId: String, revisionId: String? = nil, range: [String: Any]? = nil) {
+    func open(_ projectId: String, revisionId: String? = nil, range: [String: Any]? = nil, title: String? = nil) {
         let target = MediaTarget.project(projectId)
         finishClose()
+        givenTitle = title.flatMap { $0.isEmpty ? nil : $0 }
         self.target = target
         changed()
         self.revisionId = revisionId
@@ -80,7 +83,7 @@ final class PreviewController {
         polling = true
         requestOperation = "preview.get"
         let current = generation
-        presentation.open(title: title(for: target), retry: { [weak self] in
+        presentation.open(title: self.title(for: target), retry: { [weak self] in
             guard let self, self.generation == current else { return }
             self.retryPreview()
         }, closed: { [weak self] in

@@ -37,6 +37,7 @@ enum ControlsProbe { static let observed = true }
             ("waiting", .init(available: true, enabled: true, status: "An update is waiting for recording and background work to finish.")),
             ("failure", .init(available: true, enabled: true, status: "Update failed: the download could not be verified. Your current version is unchanged.", canCheck: true)),
             ("manual", .init()),
+            ("notice", .init(available: true, enabled: true, canCheck: true)),
         ]
         for (theme, appearance) in [("light", NSAppearance.Name.aqua), ("dark", .darkAqua)] {
             for (name, updates) in states {
@@ -45,6 +46,9 @@ enum ControlsProbe { static let observed = true }
                 model.state.permissions = ControlsState.Permissions(screen: .granted, microphone: .granted)
                 model.state.shortcutOverridePath = "/Users/example/.yap/shortcuts.json"
                 model.state.updates = updates
+                if name == "notice" {
+                    model.state.adminMessage = "Yap 0.1.41 cannot update itself. Back up ~/.yap, then reinstall Yap from justyap.io."
+                }
                 let content = NSHostingView(rootView: SettingsView(model: model))
                 content.sizingOptions = []
                 content.appearance = NSAppearance(named: appearance)

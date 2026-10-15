@@ -208,3 +208,18 @@ func runSavedProjectRowTests() {
         "I want you to use this recording with this ID with the Yap CLI: t-1")
     print("PASS a project row reads as a project and can still be handed to an agent")
 }
+
+func runSavedPagingTests() {
+    var state = ready()
+    state.library.recent = [.init(recordingId: "take", createdAt: "2026-09-15T18:04:05Z",
+        state: "complete", sourceDurationUs: 1_000_000, interruptionReason: nil)]
+    let paging: Set<ControlsAction> = [.previousRecordings, .nextRecordings]
+    precondition(LibraryPresentation.recordings(for: state).actions.filter { paging.contains($0.action) }.isEmpty,
+                 "With one page there is no paging to offer")
+    state.library.nextRecordingCursor = .init(beforeSequence: 1)
+    state.library.recordingsRefreshing = true
+    let refreshing = LibraryPresentation.recordings(for: state).actions.filter { paging.contains($0.action) }
+    precondition(refreshing.map(\.action) == [.nextRecordings] && !refreshing[0].enabled,
+                 "Another page stays offered while a refresh disables it")
+    print("PASS paging appears where another page exists and stays put while refreshing")
+}

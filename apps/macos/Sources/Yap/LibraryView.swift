@@ -94,6 +94,14 @@ final class LibraryView: NSView, NSSearchFieldDelegate {
         renderContent()
     }
 
+    /// The height a wrapping label really takes at this width: measured by the same cell that
+    /// draws it, so its last line is never clipped by a narrower text container.
+    private func wrappedHeight(_ text: String, size: CGFloat, width: CGFloat) -> CGFloat {
+        let field = NSTextField(wrappingLabelWithString: text)
+        field.font = .systemFont(ofSize: size)
+        return ceil(field.cell?.cellSize(forBounds: NSRect(x: 0, y: 0, width: width, height: .greatestFiniteMagnitude)).height ?? 0)
+    }
+
     private func label(_ text: String, frame: NSRect, size: CGFloat, weight: NSFont.Weight = .regular,
                        color: NSColor = .labelColor, in parent: NSView, wrap: Bool = false, passive: Bool = false) {
         let field = passive ? PassiveLabel(wrappingLabelWithString: text) : NSTextField(wrappingLabelWithString: text)
@@ -181,8 +189,7 @@ final class LibraryView: NSView, NSSearchFieldDelegate {
         }
         var y: CGFloat = 88
         for failure in [state.libraryFailure, state.storageFailure].compactMap({ $0 }) {
-            let measured = (failure as NSString).boundingRect(with: NSSize(width: width - 44, height: .greatestFiniteMagnitude), options: [.usesLineFragmentOrigin], attributes: [.font: NSFont.systemFont(ofSize: 12)])
-            let height = max(38, ceil(measured.height))
+            let height = max(38, wrappedHeight(failure, size: 12, width: width - 44))
             label(failure, frame: NSRect(x: 22, y: y, width: width - 44, height: height), size: 12, color: .secondaryLabelColor, in: document, wrap: true)
             y += height + 6
         }
@@ -194,15 +201,15 @@ final class LibraryView: NSView, NSSearchFieldDelegate {
                 continue
             }
             let details = row.details
-            guard filter.isEmpty || ([row.title] + details).contains(where: { $0.localizedCaseInsensitiveContains(filter) }) else { continue }
+            // Everything the row shows can be filtered on, its state included.
+            guard filter.isEmpty || ([row.title] + (row.status.map { [$0] } ?? []) + details)
+                .contains(where: { $0.localizedCaseInsensitiveContains(filter) }) else { continue }
             let id = row.id
             let top = y
             let textX: CGFloat = 76
             let textWidth = width - textX - 72
             let subtitle = ((row.status.map { [$0] } ?? []) + details).joined(separator: " · ")
-            let subtitleHeight = subtitle.isEmpty ? 0 : ceil((subtitle as NSString).boundingRect(
-                with: NSSize(width: textWidth, height: .greatestFiniteMagnitude), options: [.usesLineFragmentOrigin],
-                attributes: [.font: NSFont.systemFont(ofSize: 11)]).height)
+            let subtitleHeight = subtitle.isEmpty ? 0 : wrappedHeight(subtitle, size: 11, width: textWidth)
             let height = max(60, 33 + subtitleHeight + 13)
             // The row is its own button: the whole card opens it, with its text and icon passing clicks through.
             let card = LibraryRowButton(frame: NSRect(x: 12, y: top + 2, width: width - 24, height: height - 4), clickable: row.open != nil)
@@ -216,7 +223,7 @@ final class LibraryView: NSView, NSSearchFieldDelegate {
             }
             document.addSubview(card)
             // Colour means something: a problem row is the only one that stands out.
-            let attention = row.status == "Attention"
+            let attention = row.attention
             let tint: NSColor = attention ? .systemOrange : row.kind == .project ? .systemBlue : .secondaryLabelColor
             let symbol = attention ? "exclamationmark.triangle.fill" : row.kind == .recording ? "video.fill" : row.kind == .project ? "square.stack.3d.up.fill" : "square.and.arrow.up.fill"
             let tile = PassiveImage(frame: NSRect(x: 28, y: top + 12, width: 36, height: 36))
@@ -263,13 +270,8 @@ final class LibraryView: NSView, NSSearchFieldDelegate {
             label(filter.isEmpty ? "No tracked deliveries." : "No items match this page filter.", frame: NSRect(x: 22, y: y, width: width - 44, height: 44), size: 12, color: .secondaryLabelColor, in: document, wrap: true)
             y += 50
         }
-        // Paging appears only when there is somewhere to go; the page's actions sit small, at the right.
-        let shown = page.actions.filter { command in
-            switch command.action {
-            case .previousRecordings, .nextRecordings, .previousProjects, .nextProjects: command.enabled
-            default: true
-            }
-        }
+        // The page's actions sit small, at the right; paging is offered only where another page exists.
+        let shown = page.actions
         if !shown.isEmpty {
             y += 10
             var x = width - 22

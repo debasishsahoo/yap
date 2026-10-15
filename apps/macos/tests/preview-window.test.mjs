@@ -47,7 +47,9 @@ import AVKit
         precondition(bar.bounds.maxX - exportFrame.maxX < 30, "Export stays at the right edge: \(exportFrame) in \(bar.bounds)")
         let pills = descendants(bar).compactMap { $0 as? NSButton }.filter { $0.identifier?.rawValue.hasPrefix("preview.revision.") == true }
         precondition(pills.map(\.title) == ["Revision 2", "Revision 1"], "A few revisions show as one row of choices")
-        precondition(pills[0].accessibilityValue() as? String == "selected" && pills[1].accessibilityValue() == nil,
+        precondition(pills.map { $0.accessibilityRole() } == [.radioButton, .radioButton]
+                     && (pills[0].accessibilityValue() as? NSNumber)?.boolValue == true
+                     && (pills[1].accessibilityValue() as? NSNumber)?.boolValue == false,
                      "The shown revision is the selected one")
         pills[1].performClick(nil)
         precondition(chosen == ["r1"], "Choosing a segment shows that revision: \(chosen)")
