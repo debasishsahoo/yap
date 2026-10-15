@@ -6,6 +6,27 @@ The capture menu keeps its dark appearance after selecting a recording area and
 shows the latest recording below the action buttons with Play and Copy agent prompt
 actions. Screen recordings now include the pointer in the captured video.
 
+## 0.1.43
+
+Updates can no longer get stuck. A service that fails, stops answering or keeps
+refusing no longer holds an update back: the app ends it and installs once
+nothing is recording, and restarts it if the update does not go ahead. A take
+whose recovery failed no longer blocks updates, a stalled installation never
+asks you to quit and reopen, and released apps retry every hour instead of
+once a day.
+
+The app answers its own operations (`update.*`, `skill.*`, `cli.*` and the
+login item) on its own socket, so `yap update.check` and friends work even when
+the service does not. `yap login.status` and `yap login.setEnabled` now work
+from the command line. A `yap mcp` session holds the installation lock only
+while a call runs, so an open agent no longer blocks updates; after an update
+it exits so the agent starts the new version. `transcript.review` downloads the
+default transcription model again when it is missing.
+
+If your app is on 0.1.40 or 0.1.41, it cannot update itself: reinstall this
+release once by hand. A `yap mcp` session started from 0.1.42 or earlier still
+holds the lock until its agent restarts it.
+
 ## 0.1.42
 
 Fixes Yap showing its service as unavailable, with an empty Library, in 0.1.40
