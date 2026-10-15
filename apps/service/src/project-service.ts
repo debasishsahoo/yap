@@ -240,6 +240,7 @@ export async function startProjectService(options: {
   const delivery = new DerivativeDelivery();
   const modelLifetime = new AbortController();
   const modelPreparations = new Set<Promise<void>>();
+  const reviewModelPreparations = new Map<string, Promise<void>>();
   const pending = new Set<Promise<OperationResult>>();
   // Keep the receipt lifetime explicit until a durable package resource owner exists.
   const correspondenceReceipts = new Map<string, CorrespondenceReceipt>();
@@ -644,7 +645,28 @@ export async function startProjectService(options: {
           }),
         ) as SpeechTranscriptionReceipt,
     });
-    const reviewModelError = () => models.notPrepared("parakeet", "transcription");
+    const ensureReviewModel = () => {
+      const modelId = "parakeet";
+      const current = transcripts.recognitionReadiness();
+      if (current.state === "ready" || current.state === "preparing" || current.state === "failed")
+        return current;
+      let flight = reviewModelPreparations.get(modelId);
+      if (!flight) {
+        flight = models
+          .prepare(modelId, modelLifetime.signal, {})
+          .catch((error) => {
+            if (!modelLifetime.signal.aborted) console.error(error);
+          })
+          .finally(() => reviewModelPreparations.delete(modelId));
+        reviewModelPreparations.set(modelId, flight);
+        modelPreparations.add(flight);
+        void flight.finally(() => {
+          modelPreparations.delete(flight!);
+          admission.progress();
+        });
+      }
+      return transcripts.recognitionReadiness();
+    };
     const audioCapabilities = await nativeAudioCapabilities(worker);
     const pictureCapabilities = await nativePictureCapabilities(worker);
     const processingRuntime = await audioProcessingRuntime(
@@ -2188,13 +2210,13 @@ export async function startProjectService(options: {
                   dependency.state === "unavailable" && dependency.reason === "model_not_prepared",
               );
               if (pending.length) {
+                const model = ensureReviewModel();
                 return {
                   ok: true,
                   data: {
                     ...requested,
-                    state: "unavailable",
-                    reason: "model_not_prepared",
-                    error: reviewModelError(),
+                    state: model.state === "ready" ? "not_ready" : "preparing",
+                    model,
                     page: null,
                   },
                 };
@@ -2222,13 +2244,13 @@ export async function startProjectService(options: {
             if (current.reason === "no_audio")
               return { ok: true, data: { ...current, page: null } };
             if (current.reason === "model_not_prepared") {
+              const model = ensureReviewModel();
               return {
                 ok: true,
                 data: {
                   ...current,
-                  state: "unavailable",
-                  reason: "model_not_prepared",
-                  error: reviewModelError(),
+                  state: model.state === "failed" ? "failed" : "preparing",
+                  model,
                   page: null,
                 },
               };

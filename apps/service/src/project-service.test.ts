@@ -1479,12 +1479,7 @@ test("selected-source transcript reads report unprepared models without download
     await f.call("transcript.review", { ...selection, range: { startUs: 0, endUs: 1_000_000 } }),
   ).toMatchObject({
     ok: true,
-    data: {
-      state: "unavailable",
-      reason: "model_not_prepared",
-      error: { code: "MODEL_NOT_PREPARED" },
-      page: null,
-    },
+    data: { state: "preparing", model: { state: "preparing" }, page: null },
   });
   expect(await f.call("transcript.search", { ...selection, text: "hello" })).toMatchObject({
     ok: true,
@@ -1500,7 +1495,7 @@ test("selected-source transcript reads report unprepared models without download
   });
   expect(await f.call("model.status", { modelId: "parakeet" })).toMatchObject({
     ok: true,
-    data: { state: "absent" },
+    data: { state: "preparing" },
   });
   expect(requests.filter((operation) => operation === "speech.transcribe")).toEqual([]);
 });

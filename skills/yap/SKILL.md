@@ -33,8 +33,9 @@ of several recordings they meant. When the user requests alternatives, keep
 those alternatives open.
 
 **Evidence requests include readiness.** Call the requested capability directly.
-Do not call `model.prepare` as a preflight: ordinary capability calls and status
-reads do not download anything. If a call returns `MODEL_NOT_PREPARED` or
+Do not call `model.prepare` as a preflight: status reads never download, and the
+default transcript model is the only one Yap fetches on its own, reported as
+`preparing`. If a call returns `MODEL_NOT_PREPARED` or
 `unavailable:model_not_prepared`, read its details and explain to the user which
 optional model/runtime is missing, what it is for, what will be downloaded and the
 reported size or scope. Ask whether they want that download. Only after an explicit
