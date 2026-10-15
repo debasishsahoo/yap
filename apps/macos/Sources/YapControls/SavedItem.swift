@@ -22,14 +22,23 @@ public struct SavedItem: Equatable, Sendable {
     public let status: String?
     public let details: [String]
     public let actions: [PresentedControlsAction]
+    /// The action clicking the row performs (playing a recording, previewing a project), if any.
+    private let opens: ControlsAction?
+    /// The row's open action while it is offered and enabled; the row is clickable only then.
+    public var open: ControlsAction? {
+        guard let opens, actions.contains(where: { $0.action == opens && $0.enabled }) else { return nil }
+        return opens
+    }
     public init(id: String, kind: Kind, title: String, status: String? = nil,
-                details: [String] = [], actions: [PresentedControlsAction] = []) {
+                details: [String] = [], actions: [PresentedControlsAction] = [],
+                opens: ControlsAction? = nil) {
         self.id = id
         self.kind = kind
         self.title = title
         self.status = status
         self.details = details
         self.actions = actions
+        self.opens = opens
     }
 }
 

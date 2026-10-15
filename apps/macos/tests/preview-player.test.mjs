@@ -99,7 +99,7 @@ struct Refused: LocalizedError { var errorDescription: String? { "NOT_FOUND: pro
         owner.tick()
         await settle()
         guard let window = visible() else { preconditionFailure("Preview did not open: \\(failures)") }
-        let view = window.contentView as! AVPlayerView
+        let view = window.contentView!.subviews.first { $0 is AVPlayerView } as! AVPlayerView
         let item = view.player!.currentItem!
         for _ in 0..<30 {
             if item.status != .unknown { break }
@@ -138,14 +138,14 @@ struct Refused: LocalizedError { var errorDescription: String? { "NOT_FOUND: pro
         service.queued = true
         owner.open("take"); await settle(); owner.tick(); await settle()
         let replaced = visible()!
-        let replacedView = replaced.contentView as! AVPlayerView
+        let replacedView = replaced.contentView!.subviews.first { $0 is AVPlayerView } as! AVPlayerView
         let token = service.lastToken
         service.queued = true
         owner.open("take"); await settle()
         precondition(!replaced.isVisible && replacedView.player == nil && service.closed.contains(token))
         owner.tick(); await settle()
         let closing = visible()!
-        let closingView = closing.contentView as! AVPlayerView
+        let closingView = closing.contentView!.subviews.first { $0 is AVPlayerView } as! AVPlayerView
         closing.performClose(nil)
         await settle()
         precondition(!closing.isVisible && closingView.player == nil && service.closed.contains(service.lastToken))
@@ -272,7 +272,7 @@ struct PlaybackFailure: LocalizedError {
         let owner = PreviewController(call: service.call, failure: { failures.append($0) })
         owner.open(service.project, revisionId: service.revision)
         let window = NSApp.windows.first { $0.isVisible && ($0.title.hasPrefix("Preview —") || $0.title.hasPrefix("Preparing Preview —")) }!
-        let view = window.contentView as! AVPlayerView
+        let view = window.contentView!.subviews.first { $0 is AVPlayerView } as! AVPlayerView
         // The ready task cannot run on this actor until the first await below. KVO delivery
         // from this actor's player assignment mutes it before PreviewWindow calls play().
         var mutedAssignments = 0

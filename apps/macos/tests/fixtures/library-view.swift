@@ -29,6 +29,18 @@ import YapControls
         deniedPlay.performClick(nil)
         deniedCopy.performClick(nil)
         precondition(actions == [.playRecording("fixture-recording"), .copyRecordingPrompt("fixture-recording"), .copyRecordingPrompt("fixture-recording")], "Inapplicable playback cannot escape while local copying remains available")
+        guard let row = view.control(identifier: "open.fixture-recording") as? NSButton else {
+            preconditionFailure("A ready recording's whole row opens it")
+        }
+        let document = play.superview!
+        let center = document.convert(NSPoint(x: play.frame.midX, y: play.frame.midY), to: document.superview)
+        let hit = document.hitTest(center)
+        precondition(hit === play || hit?.isDescendant(of: play) == true,
+                     "The row's own buttons stay above its click target")
+        row.performClick(nil)
+        precondition(actions.last == .playRecording("fixture-recording"), "Clicking a recording's row plays it")
+        precondition(denied.control(identifier: "open.fixture-recording") == nil,
+                     "A row whose playback is unavailable is not clickable")
         let output = CommandLine.arguments[1]
         let labelled = CommandLine.arguments[2] != "omit"
         var observations: [[String: Any]] = []

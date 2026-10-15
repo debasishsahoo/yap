@@ -78,7 +78,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         updates.restartService = { [weak self] in self?.restartService() }
         updates.endService = { [weak self] host in self?.endService(host) }
         controls?.updateProgress = { [weak updates] in updates?.progress() }
-        controller.updateProgress = { [weak updates] in updates?.progress() }
+        controller.updateProgress = { [weak updates, weak controller] in
+            PreviewWindow.takeInProgress = controller?.isCapturing ?? false
+            updates?.progress()
+        }
         sparkle = SparkleDriver(owner: updates, changed: { [weak self] in self?.refreshUpdateControls() }) { [weak self] in
             guard let self, self.updates?.mayTerminateForUpdate == true else { return }
             self.updaterTermination = true

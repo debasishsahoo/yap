@@ -173,3 +173,19 @@ func runSavedRecordingTests() {
     precondition(page.items.flatMap(\.actions).contains { $0.action == .playRecording("sibling") && $0.enabled })
     print("PASS saved recording actions preserve source and deletion identity")
 }
+
+func runSavedRowOpenTests() {
+    var state = ready()
+    state.library.recent = [.init(recordingId: "take", createdAt: "2026-09-15T18:04:05Z",
+        state: "complete", sourceDurationUs: 1_000_000, interruptionReason: nil)]
+    let project = #"{"projectId":"project","title":"Launch","createdAt":"2026-09-15T18:04:05Z","currentRevisionId":"r1"}"#
+    state.library.projects = [try! JSONDecoder().decode(LibraryState.Project.self, from: Data(project.utf8))]
+    precondition(LibraryPresentation.recordings(for: state).items.first?.open == .playRecording("take"),
+                 "Clicking a recording plays it")
+    precondition(LibraryPresentation.projects(for: state, exports: .init()).items.first?.open == .previewProject("project"),
+                 "Clicking a project previews it")
+    state.service = .unavailable("down")
+    precondition(LibraryPresentation.projects(for: state, exports: .init()).items.first?.open == nil,
+                 "A row whose open action is unavailable is not clickable")
+    print("PASS clicking a saved row plays a recording or previews a project, only while that is enabled")
+}

@@ -243,7 +243,19 @@ final class LibraryView: NSView, NSSearchFieldDelegate {
                 document.addSubview(more)
                 controls["actions.\(id)"] = more
             }
+            let rowTop = y
             y = max(y + 64, detailY + 13)
+            if let open = row.open {
+                // The whole row opens it; its own buttons and menu sit above this and still answer.
+                let target = NSButton(title: "", target: self, action: #selector(activate(_:)))
+                target.isBordered = false
+                target.frame = NSRect(x: 22, y: rowTop, width: width - 44, height: y - rowTop)
+                target.identifier = .init("open.\(id)")
+                target.setAccessibilityLabel("Open \(row.title)")
+                document.addSubview(target, positioned: .below, relativeTo: nil)
+                controls["open.\(id)"] = target
+                actions[ObjectIdentifier(target)] = open
+            }
             let rule = NSBox(frame: NSRect(x: 22, y: y, width: width - 44, height: 1))
             rule.boxType = .separator
             document.addSubview(rule)

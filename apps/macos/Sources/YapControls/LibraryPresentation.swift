@@ -36,7 +36,7 @@ public enum LibraryPresentation {
                 status: status, details: details, actions: [
                     .init(.playRecording(take.recordingId), "Play", enabled: state.service == .ready && !pending && take.state != "canceled"),
                     .init(.copyRecordingPrompt(take.recordingId), "Copy agent prompt", enabled: !pending),
-                ])
+                ], opens: .playRecording(take.recordingId))
         }, actions: actions)
     }
 
@@ -53,7 +53,7 @@ public enum LibraryPresentation {
                 .init(.exportProject(project.projectId, .video), "Export Video…", enabled: usable && exports.choosing == nil),
                 .init(.exportProject(project.projectId, .package), "Export AI Package…", enabled: usable && exports.choosing == nil),
                 .init(.deleteProject(project.projectId), "Delete Project", enabled: usable),
-            ]))
+            ], opens: .previewProject(project.projectId)))
         }
         for request in state.library.deletions.values.sorted(by: { $0.target.id < $1.target.id }) {
             guard case .project(let id) = request.target else { continue }

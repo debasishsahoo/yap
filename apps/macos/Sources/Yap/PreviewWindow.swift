@@ -13,8 +13,20 @@ final class PreviewWindow: NSObject, PreviewPresenting, NSWindowDelegate {
     private var onRetry: (@MainActor () -> Void)?
     private var onClose: (@MainActor () -> Void)?
     private var timelineBar: NSStackView?
+    private var exportButton: NSButton?
+    /// The strip above the video, holding revision history and Export; hidden while empty.
+    private static let barHeight: CGFloat = 36
     private var timelineActions: [ObjectIdentifier: @MainActor () -> Void] = [:]
     private var exportAction: (@MainActor () -> Void)?
+
+    /// While a take records, previews stay out of every capture: a display take leaves out this
+    /// app's windows only if one was on screen when it began, and a preview may open after. At any
+    /// other time people can screenshot and share them.
+    static var takeInProgress = false {
+        didSet { for preview in shown.allObjects { preview.applySharing() } }
+    }
+    private static let shown = NSHashTable<PreviewWindow>.weakObjects()
+    private func applySharing() { window?.sharingType = Self.takeInProgress ? .none : .readOnly }
 
     /// Checks that intentionally exercise real windows keep them behind the person's work.
     private static let observed = !(ProcessInfo.processInfo.environment["YAP_FIXTURE_CONTROLS"] ?? "")
@@ -25,28 +37,34 @@ final class PreviewWindow: NSObject, PreviewPresenting, NSWindowDelegate {
     {
         self.onRetry = onRetry
         self.onClose = onClose
-        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 800, height: 500),
+        // Recordings are usually 16:9; a window of that shape shows one without letterboxing.
+        // Yap's own captures leave out its windows by app, so people can still screenshot this one.
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 800, height: 450),
             styleMask: [.titled, .closable, .resizable, .miniaturizable], backing: .buffered, defer: false)
         window.isReleasedWhenClosed = false
         window.delegate = self
         window.title = title
-        // Watching an earlier take must stay out of every capture, including one already running.
-        window.sharingType = .none
-        let view = AVPlayerView(frame: window.contentView!.bounds)
+        let container = NSView(frame: window.contentView!.bounds)
+        container.wantsLayer = true
+        container.layer?.backgroundColor = NSColor.black.cgColor
+        window.contentView = container
+        let view = AVPlayerView(frame: container.bounds)
         view.autoresizingMask = [.width, .height]
         view.controlsStyle = .floating
         view.showsSharingServiceButton = false
         view.allowsVideoFrameAnalysis = false
-        window.contentView = view
-        let bar = NSStackView(frame: NSRect(x: 12, y: view.bounds.height - 38, width: view.bounds.width - 24, height: 28))
+        container.addSubview(view)
+        let bar = NSStackView(frame: NSRect(x: 0, y: container.bounds.height - Self.barHeight,
+            width: container.bounds.width, height: Self.barHeight))
         bar.autoresizingMask = [.width, .minYMargin]
         bar.orientation = .horizontal
         bar.alignment = .centerY
         bar.spacing = 6
-        bar.distribution = .fillProportionally
+        bar.edgeInsets = NSEdgeInsets(top: 0, left: 12, bottom: 0, right: 12)
         bar.wantsLayer = true
-        bar.layer?.backgroundColor = NSColor.windowBackgroundColor.withAlphaComponent(0.9).cgColor
-        view.addSubview(bar)
+        bar.layer?.backgroundColor = NSColor.windowBackgroundColor.cgColor
+        bar.isHidden = true
+        container.addSubview(bar)
         timelineBar = bar
         let label = NSTextField(wrappingLabelWithString: "Preparing preview…")
         label.frame = NSRect(x: 24, y: 220, width: 752, height: 60)
@@ -60,6 +78,8 @@ final class PreviewWindow: NSObject, PreviewPresenting, NSWindowDelegate {
         button.isHidden = true
         view.addSubview(button)
         self.window = window
+        Self.shown.add(self)
+        applySharing()
         playerView = view
         message = label
         retry = button
@@ -82,7 +102,7 @@ final class PreviewWindow: NSObject, PreviewPresenting, NSWindowDelegate {
 
     func showTimeline(_ items: [PreviewTimelineItem], selected: String, select: @escaping @MainActor (String) -> Void) {
         guard let bar = timelineBar else { return }
-        for view in bar.arrangedSubviews {
+        for view in bar.arrangedSubviews where view !== exportButton {
             bar.removeArrangedSubview(view)
             view.removeFromSuperview()
         }
@@ -95,20 +115,43 @@ final class PreviewWindow: NSObject, PreviewPresenting, NSWindowDelegate {
             button.identifier = .init("timeline.\(item.id)")
             button.state = item.id == selected ? .on : .off
             timelineActions[ObjectIdentifier(button)] = { select(item.id) }
-            bar.addArrangedSubview(button)
+            bar.insertArrangedSubview(button, at: bar.arrangedSubviews.count - (exportButton == nil ? 0 : 1))
         }
+        layoutBar()
     }
 
     func showExport(_ action: @escaping @MainActor () -> Void) {
         exportAction = action
-        guard let view = playerView else { return }
+        guard let bar = timelineBar, exportButton == nil else { return }
+        let spacer = NSView()
+        spacer.setContentHuggingPriority(.init(1), for: .horizontal)
+        bar.addArrangedSubview(spacer)
         let button = NSButton(title: "Export", target: self, action: #selector(exportPreview(_:)))
         button.bezelStyle = .rounded
         button.controlSize = .small
         button.identifier = .init("inspector.export")
-        button.frame = NSRect(x: view.bounds.width - 92, y: view.bounds.height - 38, width: 80, height: 26)
-        button.autoresizingMask = [.minXMargin, .minYMargin]
-        view.addSubview(button)
+        bar.addArrangedSubview(button)
+        exportButton = button
+        layoutBar()
+    }
+
+    /// Shows the strip only when it holds something, above the video rather than over it. The
+    /// window grows by the strip's height so the video keeps its shape.
+    private func layoutBar() {
+        guard let bar = timelineBar, let view = playerView, let window,
+            let container = window.contentView else { return }
+        let showing = bar.arrangedSubviews.contains { $0 is NSButton }
+        guard showing == bar.isHidden else { return }
+        bar.isHidden = !showing
+        var frame = window.frame
+        let change = showing ? Self.barHeight : -Self.barHeight
+        frame.size.height += change
+        frame.origin.y -= change
+        window.setFrame(frame, display: true)
+        view.frame = NSRect(x: 0, y: 0, width: container.bounds.width,
+            height: container.bounds.height - (showing ? Self.barHeight : 0))
+        bar.frame = NSRect(x: 0, y: container.bounds.height - Self.barHeight,
+            width: container.bounds.width, height: Self.barHeight)
     }
 
     func play(title: String, file: String, mediaType: String,
@@ -195,6 +238,7 @@ final class PreviewWindow: NSObject, PreviewPresenting, NSWindowDelegate {
         onRetry = nil
         onClose = nil
         timelineBar = nil
+        exportButton = nil
         timelineActions.removeAll()
         exportAction = nil
     }
