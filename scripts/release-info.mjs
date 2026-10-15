@@ -42,6 +42,9 @@ export function configureReleasePlist(plist, facts, publicKey) {
     SUVerifyUpdateBeforeExtraction: ["bool", true],
     SUSignedFeedFailureExpirationInterval: ["real", 0],
     SUEnableAutomaticChecks: ["bool", true],
+    // Sparkle's shortest schedule: a cycle that failed, or found the installer busy, is retried
+    // within the hour instead of the default day.
+    SUScheduledCheckInterval: ["integer", 3600],
     SUAllowsAutomaticUpdates: ["bool", false],
     SUAutomaticallyUpdate: ["bool", false],
   };
