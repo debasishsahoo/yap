@@ -122,9 +122,10 @@ final class LibraryView: NSView, NSSearchFieldDelegate {
         actions = [:]
         tabActions = [:]
         actionItems = [:]
-        let sidebar = NSView(frame: NSRect(x: 0, y: 0, width: 146, height: bounds.height))
-        sidebar.wantsLayer = true
-        sidebar.layer?.backgroundColor = NSColor.controlBackgroundColor.cgColor
+        let sidebar = NSVisualEffectView(frame: NSRect(x: 0, y: 0, width: 146, height: bounds.height))
+        sidebar.material = .sidebar
+        sidebar.blendingMode = .behindWindow
+        sidebar.state = .followsWindowActiveState
         addSubview(sidebar)
         let divider = NSBox(frame: NSRect(x: 145, y: 0, width: 1, height: bounds.height))
         divider.boxType = .separator
@@ -142,8 +143,18 @@ final class LibraryView: NSView, NSSearchFieldDelegate {
             tabActions[ObjectIdentifier(button)] = value
         }
         let storage = state.storage.map { ByteCountFormatter.string(fromByteCount: $0.totalBytes, countStyle: .file) } ?? "not measured"
-        label("Stored on this Mac\nStorage: \(storage)", frame: NSRect(x: 20, y: max(200, bounds.height - 80), width: 114, height: 40), size: 10, color: .secondaryLabelColor, in: self, wrap: true)
-        button("Refresh storage", id: "storage.refresh", frame: NSRect(x: 11, y: max(244, bounds.height - 36), width: 124, height: 24), action: .refreshStorage, enabled: state.service == .ready && !state.storageRefreshing, in: self)
+        let footerY = max(200, bounds.height - 34)
+        label(state.storage == nil ? "Not measured" : "\(storage) used", frame: NSRect(x: 20, y: footerY + 4, width: 92, height: 16), size: 10, color: .secondaryLabelColor, in: self)
+        let refresh = NSButton(image: NSImage(systemSymbolName: "arrow.clockwise", accessibilityDescription: "Refresh storage")!, target: self, action: #selector(activate(_:)))
+        refresh.isBordered = false
+        refresh.contentTintColor = .secondaryLabelColor
+        refresh.toolTip = "Refresh storage"
+        refresh.frame = NSRect(x: 114, y: footerY, width: 22, height: 22)
+        refresh.isEnabled = state.service == .ready && !state.storageRefreshing
+        refresh.identifier = .init("storage.refresh")
+        addSubview(refresh)
+        controls["storage.refresh"] = refresh
+        actions[ObjectIdentifier(refresh)] = .refreshStorage
         renderContent()
     }
 
@@ -162,20 +173,20 @@ final class LibraryView: NSView, NSSearchFieldDelegate {
         controls["library.filter"] = filterField
         let subtitle = tab == .recordings ? "Your original captures. Always kept intact." : tab == .projects ? "Projects you explicitly created." : "Tracked deliveries and unfinished recovery."
         label(subtitle, frame: NSRect(x: 22, y: 55, width: width - 44, height: 20), size: 11, color: .secondaryLabelColor, in: document)
-        label(tab == .exports ? "DELIVERIES" : "THIS PAGE", frame: NSRect(x: 22, y: 88, width: width - 44, height: 16), size: 10, weight: .semibold, color: .secondaryLabelColor, in: document)
         let page: SavedPage
         switch tab {
         case .recordings: page = LibraryPresentation.recordings(for: state)
         case .projects: page = LibraryPresentation.projects(for: state, exports: exports)
         case .exports: page = ExportPresentation.items(for: state, exports: exports)
         }
-        var y: CGFloat = 114
+        var y: CGFloat = 88
         for failure in [state.libraryFailure, state.storageFailure].compactMap({ $0 }) {
             let measured = (failure as NSString).boundingRect(with: NSSize(width: width - 44, height: .greatestFiniteMagnitude), options: [.usesLineFragmentOrigin], attributes: [.font: NSFont.systemFont(ofSize: 12)])
             let height = max(38, ceil(measured.height))
             label(failure, frame: NSRect(x: 22, y: y, width: width - 44, height: height), size: 12, color: .secondaryLabelColor, in: document, wrap: true)
             y += height + 6
         }
+        let firstRow = y
         for row in page.items {
             guard row.kind != .message else {
                 label(row.title, frame: NSRect(x: 22, y: y, width: width - 44, height: 38), size: 12, color: .secondaryLabelColor, in: document, wrap: true)
@@ -184,52 +195,53 @@ final class LibraryView: NSView, NSSearchFieldDelegate {
             }
             let details = row.details
             guard filter.isEmpty || ([row.title] + details).contains(where: { $0.localizedCaseInsensitiveContains(filter) }) else { continue }
-            // Truthful fallback: a source/document symbol, never a generated media thumbnail.
-            let thumbnail = PassiveImage(frame: NSRect(x: 22, y: y + 12, width: 88, height: 48))
-            thumbnail.wantsLayer = true
-            thumbnail.layer?.backgroundColor = NSColor.controlBackgroundColor.cgColor
-            thumbnail.layer?.cornerRadius = 7
-            thumbnail.image = NSImage(systemSymbolName: tab == .recordings ? "video" : tab == .projects ? "doc.on.doc" : "square.and.arrow.up", accessibilityDescription: "Source icon; thumbnail unavailable")
-            thumbnail.contentTintColor = .secondaryLabelColor
-            document.addSubview(thumbnail)
-            let titleWidth = width - 214
-            let titleLabelWidth = row.kind == .recording ? titleWidth - 100 : titleWidth - 68
-            let passive = row.open != nil
-            label(row.title, frame: NSRect(x: 122, y: y + 13, width: titleLabelWidth, height: 20), size: 11, weight: .semibold, in: document, passive: passive)
-            if let status = row.status, row.kind != .recording {
-                label(status, frame: NSRect(x: width - 119, y: y + 17, width: 63, height: 42), size: 9, color: .secondaryLabelColor, in: document, wrap: true, passive: passive)
-            }
-            var detailY = y + 39
-            if let status = row.status, row.kind == .recording {
-                label(status, frame: NSRect(x: 122, y: detailY, width: titleWidth, height: 16), size: 11, color: .secondaryLabelColor, in: document, passive: passive)
-                detailY += 19
-            }
-            for detail in details {
-                let font = NSFont.systemFont(ofSize: 11)
-                let rect = (detail as NSString).boundingRect(with: NSSize(width: titleWidth, height: .greatestFiniteMagnitude), options: [.usesLineFragmentOrigin], attributes: [.font: font])
-                let height = max(16, ceil(rect.height))
-                label(detail, frame: NSRect(x: 122, y: detailY, width: titleWidth, height: height), size: 11, color: .secondaryLabelColor, in: document, wrap: true, passive: passive)
-                detailY += height + 3
-            }
-            let commands = row.actions
             let id = row.id
-            if row.kind == .recording {
-                for (index, command) in commands.enumerated() {
-                    let buttonWidth: CGFloat = index == 0 ? 72 : 126
-                    let x = width - 22 - buttonWidth - (index == 0 ? 134 : 0)
-                    button(command.title, id: "actions.\(id).\(index)",
-                        frame: NSRect(x: x, y: y + 14, width: buttonWidth, height: 28),
-                        action: command.action, enabled: command.enabled, in: document)
-                }
-            } else {
-                let more = NSPopUpButton(frame: NSRect(x: width - 49, y: y + 16, width: 27, height: 26), pullsDown: true)
+            let top = y
+            let textX: CGFloat = 76
+            let textWidth = width - textX - 72
+            let subtitle = ((row.status.map { [$0] } ?? []) + details).joined(separator: " · ")
+            let subtitleHeight = subtitle.isEmpty ? 0 : ceil((subtitle as NSString).boundingRect(
+                with: NSSize(width: textWidth, height: .greatestFiniteMagnitude), options: [.usesLineFragmentOrigin],
+                attributes: [.font: NSFont.systemFont(ofSize: 11)]).height)
+            let height = max(60, 33 + subtitleHeight + 13)
+            // The row is its own button: the whole card opens it, with its text and icon passing clicks through.
+            let card = LibraryRowButton(frame: NSRect(x: 12, y: top + 2, width: width - 24, height: height - 4), clickable: row.open != nil)
+            card.setAccessibilityLabel(row.open == nil ? row.title : "Open \(row.title)")
+            if let open = row.open {
+                card.target = self
+                card.action = #selector(activate(_:))
+                card.identifier = .init("open.\(id)")
+                controls["open.\(id)"] = card
+                actions[ObjectIdentifier(card)] = open
+            }
+            document.addSubview(card)
+            // Colour means something: a problem row is the only one that stands out.
+            let attention = row.status == "Attention"
+            let tint: NSColor = attention ? .systemOrange : row.kind == .project ? .systemBlue : .secondaryLabelColor
+            let symbol = attention ? "exclamationmark.triangle.fill" : row.kind == .recording ? "video.fill" : row.kind == .project ? "square.stack.3d.up.fill" : "square.and.arrow.up.fill"
+            let tile = PassiveImage(frame: NSRect(x: 28, y: top + 12, width: 36, height: 36))
+            tile.wantsLayer = true
+            tile.layer?.cornerRadius = 9
+            tile.layer?.backgroundColor = (attention || row.kind == .project ? tint.withAlphaComponent(0.16) : NSColor.labelColor.withAlphaComponent(0.07)).cgColor
+            tile.image = NSImage(systemSymbolName: symbol, accessibilityDescription: nil)?
+                .withSymbolConfiguration(.init(pointSize: 15, weight: .medium))
+            tile.imageScaling = .scaleNone
+            tile.contentTintColor = tint
+            document.addSubview(tile)
+            label(row.title, frame: NSRect(x: textX, y: top + 12, width: textWidth, height: 18), size: 13, weight: .semibold, in: document, passive: true)
+            if !subtitle.isEmpty {
+                label(subtitle, frame: NSRect(x: textX, y: top + 32, width: textWidth, height: subtitleHeight), size: 11, color: attention ? .systemOrange : .secondaryLabelColor, in: document, wrap: true, passive: true)
+            }
+            if !row.actions.isEmpty {
+                let more = NSPopUpButton(frame: NSRect(x: width - 56, y: top + 8, width: 30, height: 26), pullsDown: true)
                 more.isBordered = false
                 (more.cell as? NSPopUpButtonCell)?.arrowPosition = .noArrow
-                more.font = .systemFont(ofSize: 18)
                 let menu = NSMenu()
                 menu.autoenablesItems = false
-                menu.addItem(NSMenuItem(title: "⋯", action: nil, keyEquivalent: ""))
-                for command in commands {
+                let handle = NSMenuItem(title: "", action: nil, keyEquivalent: "")
+                handle.image = NSImage(systemSymbolName: "ellipsis.circle", accessibilityDescription: "Actions")
+                menu.addItem(handle)
+                for command in row.actions {
                     let action = command.action
                     let item = NSMenuItem(title: command.title, action: #selector(activateItem(_:)), keyEquivalent: "")
                     item.target = self
@@ -239,53 +251,41 @@ final class LibraryView: NSView, NSSearchFieldDelegate {
                     menu.addItem(item)
                 }
                 more.menu = menu
+                more.contentTintColor = .secondaryLabelColor
                 more.setAccessibilityLabel("Actions for \(row.title)")
                 more.identifier = .init("actions.\(id)")
                 document.addSubview(more)
                 controls["actions.\(id)"] = more
             }
-            let rowTop = y
-            y = max(y + 64, detailY + 13)
-            if let open = row.open {
-                // The whole row opens it; its own buttons and menu sit above this and still answer.
-                let target = NSButton(title: "", target: self, action: #selector(activate(_:)))
-                target.isBordered = false
-                target.frame = NSRect(x: 22, y: rowTop, width: width - 44, height: y - rowTop)
-                target.identifier = .init("open.\(id)")
-                target.setAccessibilityLabel("Open \(row.title)")
-                document.addSubview(target, positioned: .below, relativeTo: nil)
-                controls["open.\(id)"] = target
-                actions[ObjectIdentifier(target)] = open
-            }
-            let rule = NSBox(frame: NSRect(x: 22, y: y, width: width - 44, height: 1))
-            rule.boxType = .separator
-            document.addSubview(rule)
-            y += 1
+            y += height
         }
-        if y == 114 {
+        if y == firstRow {
             label(filter.isEmpty ? "No tracked deliveries." : "No items match this page filter.", frame: NSRect(x: 22, y: y, width: width - 44, height: 44), size: 12, color: .secondaryLabelColor, in: document, wrap: true)
             y += 50
         }
-        if !page.actions.isEmpty {
-            y += 12
-            let buttonWidth = min(142, (width - 44 - CGFloat(page.actions.count - 1) * 8) / CGFloat(page.actions.count))
-            for (index, command) in page.actions.enumerated() {
-                button(command.title, id: command.action.id, frame: NSRect(x: 22 + CGFloat(index) * (buttonWidth + 8), y: y, width: buttonWidth, height: 26), action: command.action, enabled: command.enabled, in: document)
+        // Paging appears only when there is somewhere to go; the page's actions sit small, at the right.
+        let shown = page.actions.filter { command in
+            switch command.action {
+            case .previousRecordings, .nextRecordings, .previousProjects, .nextProjects: command.enabled
+            default: true
             }
-            y += 32
+        }
+        if !shown.isEmpty {
+            y += 10
+            var x = width - 22
+            for command in shown.reversed() {
+                let title = command.title as NSString
+                let buttonWidth = ceil(title.size(withAttributes: [.font: NSFont.systemFont(ofSize: 11)]).width) + 28
+                x -= buttonWidth
+                button(command.title, id: command.action.id, frame: NSRect(x: x, y: y, width: buttonWidth, height: 24), action: command.action, enabled: command.enabled, in: document)
+                x -= 8
+            }
+            y += 30
         }
         if tab == .recordings && page.items.contains(where: { $0.kind == .recording }) {
-            y += 19
-            let note = NSView(frame: NSRect(x: 22, y: y, width: width - 44, height: 76))
-            note.wantsLayer = true
-            note.layer?.cornerRadius = 9
-            note.layer?.backgroundColor = NSColor.controlBackgroundColor.cgColor
-            note.layer?.borderWidth = 1
-            note.layer?.borderColor = NSColor.separatorColor.cgColor
-            document.addSubview(note)
-            label("Ready for your agent", frame: NSRect(x: 35, y: y + 12, width: width - 70, height: 18), size: 10, weight: .semibold, color: .secondaryLabelColor, in: document)
-            label("Choose a recording, then ask your agent for the edit you want. Projects appear separately when explicitly created.", frame: NSRect(x: 35, y: y + 34, width: width - 70, height: 34), size: 10, color: .secondaryLabelColor, in: document, wrap: true)
-            y += 76
+            y += 14
+            label("Choose a recording, then ask your agent for the edit you want.", frame: NSRect(x: 22, y: y, width: width - 44, height: 16), size: 11, color: .tertiaryLabelColor, in: document)
+            y += 20
         }
         document.frame = NSRect(x: 0, y: 0, width: width, height: max(bounds.height, y + 22))
         scrollView.contentView.scroll(to: oldOrigin)
@@ -352,4 +352,38 @@ private final class PassiveLabel: NSTextField {
 }
 private final class PassiveImage: NSImageView {
     override func hitTest(_ point: NSPoint) -> NSView? { nil }
+}
+
+/// A saved item's card. When it can be opened it highlights under the pointer and opens on click;
+/// the row's text and icon pass clicks through to it, and its actions menu sits above it.
+@MainActor
+private final class LibraryRowButton: NSButton {
+    private let clickable: Bool
+    private var hovering = false { didSet { needsDisplay = true } }
+    init(frame: NSRect, clickable: Bool) {
+        self.clickable = clickable
+        super.init(frame: frame)
+        title = ""
+        isBordered = false
+        setButtonType(.momentaryChange)
+        isEnabled = clickable
+    }
+    required init?(coder: NSCoder) { nil }
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+        trackingAreas.forEach(removeTrackingArea)
+        guard clickable else { return }
+        addTrackingArea(NSTrackingArea(rect: .zero, options: [.mouseEnteredAndExited, .activeInKeyWindow, .inVisibleRect], owner: self))
+    }
+    override func mouseEntered(with event: NSEvent) { hovering = true }
+    override func mouseExited(with event: NSEvent) { hovering = false }
+    override func draw(_ dirtyRect: NSRect) {
+        let alpha: CGFloat = isHighlighted ? 0.10 : hovering ? 0.06 : 0
+        guard alpha > 0 else { return }
+        NSColor.labelColor.withAlphaComponent(alpha).setFill()
+        NSBezierPath(roundedRect: bounds, xRadius: 10, yRadius: 10).fill()
+    }
+    override func resetCursorRects() {
+        if clickable { addCursorRect(bounds, cursor: .pointingHand) }
+    }
 }

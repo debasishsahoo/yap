@@ -87,7 +87,7 @@ struct Refused: LocalizedError { var errorDescription: String? { "NOT_FOUND: pro
 }
 @main struct Probe {
     @MainActor static func settle() async { try? await Task.sleep(for: .milliseconds(180)) }
-    @MainActor static func visible() -> NSWindow? { NSApp.windows.first { $0.isVisible && $0.title.hasPrefix("Preview —") } }
+    @MainActor static func visible() -> NSWindow? { NSApp.windows.first { window in window.isVisible && window.contentView.map { $0.subviews.contains { $0 is AVPlayerView } } == true } }
     @MainActor static func main() async throws {
         _ = NSApplication.shared
         NSApp.setActivationPolicy(.accessory)
@@ -106,7 +106,7 @@ struct Refused: LocalizedError { var errorDescription: String? { "NOT_FOUND: pro
             await settle()
         }
         precondition(item.status == .readyToPlay, "Actual AVPlayer must decode extensionless cache MP4")
-        precondition(window.title.contains("r7"))
+        precondition(window.title == "Project preview", "Identifiers stay out of the preview's title")
         precondition(abs(CMTimeGetSeconds(item.duration) - 2) < 0.001)
         view.player!.pause()
         // Renewal extends the same lease, without replacing the pinned player/item.
@@ -270,8 +270,9 @@ struct PlaybackFailure: LocalizedError {
         var report: [String: Any] = ["passed": false, "pid": ProcessInfo.processInfo.processIdentifier,
             "scope": "Unchanged production controller/presenter; controlled ready receipt; muted retained current A/V movie, not listening or moving-pointer verification"]
         let owner = PreviewController(call: service.call, failure: { failures.append($0) })
+            .titled { $0 == service.project ? "Fixture project" : nil }
         owner.open(service.project, revisionId: service.revision)
-        let window = NSApp.windows.first { $0.isVisible && ($0.title.hasPrefix("Preview —") || $0.title.hasPrefix("Preparing Preview —")) }!
+        let window = NSApp.windows.first { $0.isVisible && $0.title == "Fixture project" }!
         let view = window.contentView!.subviews.first { $0 is AVPlayerView } as! AVPlayerView
         // The ready task cannot run on this actor until the first await below. KVO delivery
         // from this actor's player assignment mutes it before PreviewWindow calls play().
@@ -300,8 +301,7 @@ struct PlaybackFailure: LocalizedError {
             let player = view.player!, item = player.currentItem!
             guard mutedPlayers == [ObjectIdentifier(player)], player.isMuted else { throw PlaybackFailure("Player was not muted at assignment") }
             guard abs(item.duration.seconds - 6) < 0.001 else { throw PlaybackFailure("Wrong retained duration") }
-            let title = "Preview — \\(service.project) — \\(service.revision)"
-            guard window.title == title else { throw PlaybackFailure("Wrong pinned title") }
+            guard window.title == "Fixture project" else { throw PlaybackFailure("The preview is titled by its project's name") }
             let advanceDeadline = ContinuousClock.now.advanced(by: .seconds(2))
             let completionDeadline = ContinuousClock.now.advanced(by: .seconds(10))
             var advanced = false
@@ -310,7 +310,7 @@ struct PlaybackFailure: LocalizedError {
                 observations.append(["seconds": seconds, "timeControlStatus": player.timeControlStatus.rawValue,
                     "rate": player.rate, "itemStatus": item.status.rawValue])
                 guard failures.isEmpty, item.status != .failed, window.isVisible,
-                    view.player === player, player.currentItem === item, window.title == title, player.isMuted else {
+                    view.player === player, player.currentItem === item, window.title == "Fixture project", player.isMuted else {
                     throw PlaybackFailure("Pinned player changed or failed: \\(failures)")
                 }
                 if seconds > 0.5 { advanced = true }

@@ -211,8 +211,9 @@ test("real clean frames retain edit identity and reach CLI files and MCP pixels"
     operation: "frame.get",
     params: { ...params, atUs: finished.sourceDurationUs },
   });
+  // A point outside its source is malformed under the one range rule (packages/composition README).
   assert.equal(outside.ok, false);
-  assert.equal(outside.error.code, "INVALID_PARAMS");
+  assert.equal(outside.error.code, "INVALID_RANGE");
   const outsideSource = await callLocal(socketPath(home), {
     id: randomUUID(),
     operation: "frame.get",

@@ -44,6 +44,9 @@ final class PreviewController {
     private var reading = false
     private var requestOperation = "preview.get"
     private var polling = false
+    /// The project's name as people know it; its identifiers stay out of the window.
+    var projectTitle: (String) -> String? = { _ in nil }
+    private func title(for target: MediaTarget) -> String { projectTitle(target.id) ?? "Project preview" }
 
     init(call: @escaping Call, presentation: any PreviewPresenting = PreviewWindow(),
         now: @escaping @MainActor () -> Date = Date.init, changed: @escaping () -> Void = {},
@@ -62,6 +65,11 @@ final class PreviewController {
 
     var isOpen: Bool { target != nil }
 
+    func titled(_ title: @escaping (String) -> String?) -> Self {
+        projectTitle = title
+        return self
+    }
+
     func open(_ projectId: String, revisionId: String? = nil, range: [String: Any]? = nil) {
         let target = MediaTarget.project(projectId)
         finishClose()
@@ -72,7 +80,7 @@ final class PreviewController {
         polling = true
         requestOperation = "preview.get"
         let current = generation
-        presentation.open(title: "Preparing Preview — \(target.id)", retry: { [weak self] in
+        presentation.open(title: title(for: target), retry: { [weak self] in
             guard let self, self.generation == current else { return }
             self.retryPreview()
         }, closed: { [weak self] in
@@ -173,7 +181,7 @@ final class PreviewController {
                         }
                         revisionId = answer.revisionId
                         requestOperation = "preview.get"
-                        let title = "Preview — \(target.id) — \(answer.revisionId)"
+                        let title = self.title(for: target)
                         if answer.state == "ready" {
                             guard let movie = answer.published?.output, let delivered,
                                 movie.target == target, movie.revisionId == answer.revisionId,
@@ -213,7 +221,7 @@ final class PreviewController {
 
     private func retryPreview() {
         guard let target, let revisionId, !reading else { return }
-        presentation.show(title: "Preview — \(target.id) — \(revisionId)", message: "Retrying preview…", canRetry: false)
+        presentation.show(title: title(for: target), message: "Retrying preview…", canRetry: false)
         requestOperation = "preview.retry"
         polling = true
         tick()

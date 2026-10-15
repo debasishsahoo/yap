@@ -14,29 +14,31 @@ import YapControls
         let sidebar = view.subviews.first { $0.frame.width == 146 }
         precondition(sidebar?.layer?.backgroundColor != NSColor.white.cgColor,
             "Dark-mode library sidebar must not resolve to a white surface")
-        guard let play = view.control(identifier: "actions.fixture-recording.0") as? NSButton,
-              let copy = view.control(identifier: "actions.fixture-recording.1") as? NSButton else {
-            preconditionFailure("The recording exposes play and copy-agent-prompt buttons")
+        func choose(_ item: NSMenuItem) { NSApplication.shared.sendAction(item.action!, to: item.target, from: item) }
+        guard let play = view.actionItem(identifier: ControlsAction.playRecording("fixture-recording").id),
+              let copy = view.actionItem(identifier: ControlsAction.copyRecordingPrompt("fixture-recording").id) else {
+            preconditionFailure("The recording offers play and copy-agent-prompt actions")
         }
-        play.performClick(nil)
-        copy.performClick(nil)
+        choose(play)
+        choose(copy)
         precondition(actions == [.playRecording("fixture-recording"), .copyRecordingPrompt("fixture-recording")], "The native Library preserves shared recording actions")
         let denied = LibraryView(state: ControlsState(), exports: ExportsState()) { actions.append($0) }
         denied.update(state: { var locked = state; locked.service = .unavailable("fixture service failure"); return locked }(), exports: ExportsState())
-        let deniedPlay = denied.control(identifier: "actions.fixture-recording.0") as! NSButton
-        let deniedCopy = denied.control(identifier: "actions.fixture-recording.1") as! NSButton
+        let deniedPlay = denied.actionItem(identifier: ControlsAction.playRecording("fixture-recording").id)!
+        let deniedCopy = denied.actionItem(identifier: ControlsAction.copyRecordingPrompt("fixture-recording").id)!
         precondition(!deniedPlay.isEnabled && deniedCopy.isEnabled, "Playback needs media service while prompt copying remains local")
-        deniedPlay.performClick(nil)
-        deniedCopy.performClick(nil)
+        choose(deniedPlay)
+        choose(deniedCopy)
         precondition(actions == [.playRecording("fixture-recording"), .copyRecordingPrompt("fixture-recording"), .copyRecordingPrompt("fixture-recording")], "Inapplicable playback cannot escape while local copying remains available")
+        let menu = view.control(identifier: "actions.fixture-recording")!
         guard let row = view.control(identifier: "open.fixture-recording") as? NSButton else {
             preconditionFailure("A ready recording's whole row opens it")
         }
-        let document = play.superview!
-        let center = document.convert(NSPoint(x: play.frame.midX, y: play.frame.midY), to: document.superview)
+        let document = menu.superview!
+        let center = document.convert(NSPoint(x: menu.frame.midX, y: menu.frame.midY), to: document.superview)
         let hit = document.hitTest(center)
-        precondition(hit === play || hit?.isDescendant(of: play) == true,
-                     "The row's own buttons stay above its click target")
+        precondition(hit === menu || hit?.isDescendant(of: menu) == true,
+                     "The row's actions menu stays above its click target")
         // A click on the row's title, not just its gaps, opens it.
         let titlePoint = document.convert(NSPoint(x: row.frame.minX + 110, y: row.frame.minY + 22), to: document.superview)
         let onTitle = document.hitTest(titlePoint)

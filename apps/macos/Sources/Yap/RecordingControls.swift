@@ -54,7 +54,7 @@ final class RecordingControls: NSObject {
         failure: { [weak self] message in
             self?.state.libraryFailure = message
             self?.render()
-        })
+        }).titled { [weak self] id in self?.state.library.projects.first { $0.projectId == id }?.title }
     private lazy var exports = ExportController(
         call: { [weak self] operation, params throws(ServiceFailure) in
             guard let self else { throw Self.noService }
@@ -351,7 +351,9 @@ final class RecordingControls: NSObject {
         case .playRecording(let recordingId):
             playRecording(recordingId)
         case .copyRecordingPrompt(let recordingId):
-            copyRecordingPrompt(recordingId)
+            copyAgentPrompt(.recording(recordingId))
+        case .copyProjectPrompt(let projectId):
+            copyAgentPrompt(.project(projectId))
         case .deleteRecording,
             .previewProject, .exportProject, .deleteProject, .nextProjects, .previousProjects, .nextRecordings, .previousRecordings, .refreshLibrary:
             break // LibraryController handles these before capture selections.
@@ -771,8 +773,8 @@ final class RecordingControls: NSObject {
         }
     }
 
-    private func copyRecordingPrompt(_ recordingId: String) {
-        let prompt = LibraryPresentation.agentPrompt(for: recordingId)
+    private func copyAgentPrompt(_ target: MediaTarget) {
+        let prompt = LibraryPresentation.agentPrompt(for: target)
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(prompt, forType: .string)
     }

@@ -18,7 +18,9 @@ final class PreviewWindow: NSObject, PreviewPresenting, NSWindowDelegate {
     private var exportSpacer: NSView?
     /// The strip above the video, holding revision history and Export; hidden while empty.
     private static let barHeight: CGFloat = 36
-    private var timelineActions: [ObjectIdentifier: @MainActor () -> Void] = [:]
+    private var timelineControl: NSView?
+    private var timelineChoices: [String] = []
+    private var timelineSelect: (@MainActor (String) -> Void)?
     private var exportAction: (@MainActor () -> Void)?
 
     /// While a take records, previews stay out of every capture: a display take leaves out this
@@ -45,6 +47,8 @@ final class PreviewWindow: NSObject, PreviewPresenting, NSWindowDelegate {
         window.isReleasedWhenClosed = false
         window.delegate = self
         window.title = title
+        // The header strip and the title bar read as one surface above the video.
+        window.titlebarAppearsTransparent = true
         let container = NSView(frame: window.contentView!.bounds)
         container.wantsLayer = true
         container.layer?.backgroundColor = NSColor.black.cgColor
@@ -101,23 +105,48 @@ final class PreviewWindow: NSObject, PreviewPresenting, NSWindowDelegate {
         retry?.isHidden = !canRetry
     }
 
+    /// Revision history as one control with the shown revision selected: segments while there are
+    /// few, a menu once there are more than fit.
     func showTimeline(_ items: [PreviewTimelineItem], selected: String, select: @escaping @MainActor (String) -> Void) {
         guard let bar = timelineBar else { return }
-        for view in bar.arrangedSubviews where view !== exportButton && view !== exportSpacer {
-            bar.removeArrangedSubview(view)
-            view.removeFromSuperview()
+        if let old = timelineControl {
+            bar.removeArrangedSubview(old)
+            old.removeFromSuperview()
         }
-        timelineActions.removeAll()
-        for item in items {
-            let button = NSButton(title: item.label, target: self, action: #selector(selectTimeline(_:)))
-            button.bezelStyle = .texturedRounded
-            button.controlSize = .small
-            button.toolTip = item.operation
-            button.identifier = .init("timeline.\(item.id)")
-            button.state = item.id == selected ? .on : .off
-            timelineActions[ObjectIdentifier(button)] = { select(item.id) }
-            bar.insertArrangedSubview(button, at: bar.arrangedSubviews.count - (exportButton == nil ? 0 : 2))
+        timelineControl = nil
+        timelineChoices = items.map(\.id)
+        timelineSelect = select
+        guard !items.isEmpty else { return layoutBar() }
+        let index = items.firstIndex { $0.id == selected } ?? 0
+        let control: NSView
+        if items.count <= 5 {
+            // Drawn, not system segments: the shown revision stays visibly selected even while the
+            // window is in the background, where AppKit greys system controls.
+            let pills = NSStackView()
+            pills.orientation = .horizontal
+            pills.spacing = 4
+            for (offset, item) in items.enumerated() {
+                let pill = PreviewPill(title: item.label, style: offset == index ? .selected : .plain)
+                pill.toolTip = item.operation
+                pill.tag = offset
+                pill.target = self
+                pill.action = #selector(chooseRevision(_:))
+                pill.identifier = .init("preview.revision.\(offset)")
+                pills.addArrangedSubview(pill)
+            }
+            control = pills
+        } else {
+            let menu = NSPopUpButton(frame: .zero, pullsDown: false)
+            menu.addItems(withTitles: items.map(\.label))
+            menu.selectItem(at: index)
+            menu.target = self
+            menu.action = #selector(chooseRevision(_:))
+            control = menu
         }
+        control.identifier = .init("preview.revisions")
+        control.setAccessibilityLabel("Revision")
+        bar.insertArrangedSubview(control, at: 0)
+        timelineControl = control
         layoutBar()
     }
 
@@ -128,9 +157,11 @@ final class PreviewWindow: NSObject, PreviewPresenting, NSWindowDelegate {
         spacer.setContentHuggingPriority(.init(1), for: .horizontal)
         bar.addArrangedSubview(spacer)
         exportSpacer = spacer
-        let button = NSButton(title: "Export", target: self, action: #selector(exportPreview(_:)))
-        button.bezelStyle = .rounded
-        button.controlSize = .small
+        let button = PreviewPill(title: "Export", style: .prominent, symbol: "square.and.arrow.up")
+        button.target = self
+        button.action = #selector(exportPreview(_:))
+        button.keyEquivalent = "e"
+        button.keyEquivalentModifierMask = .command
         button.identifier = .init("inspector.export")
         bar.addArrangedSubview(button)
         exportButton = button
@@ -142,7 +173,7 @@ final class PreviewWindow: NSObject, PreviewPresenting, NSWindowDelegate {
     private func layoutBar() {
         guard let bar = timelineBar, let view = playerView, let window,
             let container = window.contentView else { return }
-        let showing = bar.arrangedSubviews.contains { $0 is NSButton }
+        let showing = timelineControl != nil || exportButton != nil
         guard showing == bar.isHidden else { return }
         bar.isHidden = !showing
         var frame = window.frame
@@ -242,7 +273,9 @@ final class PreviewWindow: NSObject, PreviewPresenting, NSWindowDelegate {
         timelineBar = nil
         exportButton = nil
         exportSpacer = nil
-        timelineActions.removeAll()
+        timelineControl = nil
+        timelineChoices = []
+        timelineSelect = nil
         exportAction = nil
     }
 
@@ -252,6 +285,58 @@ final class PreviewWindow: NSObject, PreviewPresenting, NSWindowDelegate {
     }
 
     @objc private func retryPreview() { onRetry?() }
-    @objc private func selectTimeline(_ sender: NSButton) { timelineActions[ObjectIdentifier(sender)]?() }
+    @objc private func chooseRevision(_ sender: NSControl) {
+        let index = (sender as? NSPopUpButton)?.indexOfSelectedItem ?? sender.tag
+        guard timelineChoices.indices.contains(index) else { return }
+        timelineSelect?(timelineChoices[index])
+    }
     @objc private func exportPreview(_ sender: NSButton) { exportAction?() }
+}
+
+/// A header button drawn by the preview itself, so its state reads the same whether or not the
+/// window is in front: the shown revision and Export are filled with the accent colour.
+@MainActor
+final class PreviewPill: NSButton {
+    enum Style { case plain, selected, prominent }
+    private let style: Style
+    private let symbol: String?
+    private var hovering = false { didSet { needsDisplay = true } }
+    init(title: String, style: Style, symbol: String? = nil) {
+        self.style = style
+        self.symbol = symbol
+        super.init(frame: .zero)
+        self.title = title
+        isBordered = false
+        setButtonType(.momentaryChange)
+        setAccessibilityValue(style == .selected ? "selected" : nil)
+        let width = (title as NSString).size(withAttributes: [.font: Self.font]).width + (symbol == nil ? 24 : 42)
+        widthAnchor.constraint(equalToConstant: ceil(width)).isActive = true
+        heightAnchor.constraint(equalToConstant: 26).isActive = true
+    }
+    required init?(coder: NSCoder) { nil }
+    private static let font = NSFont.systemFont(ofSize: 12, weight: .medium)
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+        trackingAreas.forEach(removeTrackingArea)
+        addTrackingArea(NSTrackingArea(rect: .zero, options: [.mouseEnteredAndExited, .activeAlways, .inVisibleRect], owner: self))
+    }
+    override func mouseEntered(with event: NSEvent) { hovering = true }
+    override func mouseExited(with event: NSEvent) { hovering = false }
+    override func draw(_ dirtyRect: NSRect) {
+        let filled = style != .plain
+        let fill: NSColor = filled ? .controlAccentColor : .labelColor.withAlphaComponent(hovering ? 0.10 : 0)
+        (isHighlighted ? fill.blended(withFraction: 0.2, of: .black) ?? fill : fill).setFill()
+        NSBezierPath(roundedRect: bounds, xRadius: 7, yRadius: 7).fill()
+        let color: NSColor = filled ? .white : .secondaryLabelColor
+        var x: CGFloat = 12
+        if let symbol, let image = NSImage(systemSymbolName: symbol, accessibilityDescription: nil)?
+            .withSymbolConfiguration(.init(pointSize: 12, weight: .medium).applying(.init(paletteColors: [color])))
+        {
+            image.draw(in: NSRect(x: x, y: (bounds.height - 15) / 2, width: 13, height: 15))
+            x += 19
+        }
+        let text = title as NSString
+        let size = text.size(withAttributes: [.font: Self.font])
+        text.draw(at: NSPoint(x: x, y: (bounds.height - size.height) / 2), withAttributes: [.font: Self.font, .foregroundColor: color])
+    }
 }

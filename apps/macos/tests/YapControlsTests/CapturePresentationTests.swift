@@ -138,7 +138,7 @@ private func runOverlayCameraTests() {
 }
 
 func runSavedRecordingTests() {
-    precondition(LibraryPresentation.agentPrompt(for: "recording-1") ==
+    precondition(LibraryPresentation.agentPrompt(for: .recording("recording-1")) ==
         "I want you to use this recording with this ID with the Yap CLI: recording-1")
     var state = ready()
     let first = ControlsState.RecentTake(recordingId: "first", createdAt: "2026-09-15T18:04:05Z",
@@ -146,7 +146,9 @@ func runSavedRecordingTests() {
     let sibling = ControlsState.RecentTake(recordingId: "sibling", createdAt: first.createdAt,
         state: "complete", sourceDurationUs: 2_000_000, interruptionReason: nil)
     state.library.recent = [first, sibling]
-    precondition(LibraryPresentation.recordings(for: state).items.first?.title.hasSuffix("— 1:05") == true)
+    let listed = LibraryPresentation.recordings(for: state).items.first!
+    precondition(listed.title == ElapsedTime.shortTime(of: first.createdAt) && listed.details.first == "1:05",
+                 "A recording is titled by when it was made, with its length once, below")
     for (status, duration) in [("complete", Int64(1)), ("interrupted", 1), ("interrupted", 0), ("recording", 1), ("canceled", 1)] {
         var observed = state
         observed.library.recent = [.init(recordingId: "first", createdAt: first.createdAt,
@@ -188,4 +190,21 @@ func runSavedRowOpenTests() {
     precondition(LibraryPresentation.projects(for: state, exports: .init()).items.first?.open == nil,
                  "A row whose open action is unavailable is not clickable")
     print("PASS clicking a saved row plays a recording or previews a project, only while that is enabled")
+}
+
+func runSavedProjectRowTests() {
+    var state = ready()
+    let project = #"{"projectId":"p-1","title":"Launch","createdAt":"2026-10-13T22:12:00Z","currentRevisionId":"r-9"}"#
+    state.library.projects = [try! JSONDecoder().decode(LibraryState.Project.self, from: Data(project.utf8))]
+    let row = LibraryPresentation.projects(for: state, exports: .init()).items.first!
+    precondition(row.status == nil, "A project row does not label itself a project")
+    precondition(row.details == ["Created \(ElapsedTime.shortTime(of: "2026-10-13T22:12:00Z"))"],
+                 "A project row describes when it was made, not its identifiers: \(row.details)")
+    precondition(row.actions.contains { $0.action == .copyProjectPrompt("p-1") && $0.title == "Copy agent prompt" && $0.enabled },
+                 "A project can still be handed to an agent")
+    precondition(LibraryPresentation.agentPrompt(for: .project("p-1")) ==
+        "I want you to use this project with this ID with the Yap CLI: p-1")
+    precondition(LibraryPresentation.agentPrompt(for: .recording("t-1")) ==
+        "I want you to use this recording with this ID with the Yap CLI: t-1")
+    print("PASS a project row reads as a project and can still be handed to an agent")
 }

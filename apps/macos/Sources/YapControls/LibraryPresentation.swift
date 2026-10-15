@@ -2,8 +2,12 @@ import Foundation
 
 /// Shared saved-media facts and action applicability; renderers consume these directly.
 public enum LibraryPresentation {
-    public static func agentPrompt(for recordingId: String) -> String {
-        "I want you to use this recording with this ID with the Yap CLI: \(recordingId)"
+    /// What a person pastes into their agent to hand it a recording or project.
+    public static func agentPrompt(for target: MediaTarget) -> String {
+        switch target {
+        case .recording(let id): "I want you to use this recording with this ID with the Yap CLI: \(id)"
+        case .project(let id): "I want you to use this project with this ID with the Yap CLI: \(id)"
+        }
     }
 
     public static func recordings(for state: ControlsState) -> SavedPage {
@@ -30,9 +34,12 @@ public enum LibraryPresentation {
             }
             if let failure = take.finalizationError { details.append("Finalization failed — \(failure.code): \(failure.message)") }
             if let failure = request?.failure { details.append("Delete not confirmed — \(failure)") }
-            let suffix = pending ? " — deleting…" : request == nil ? "" : " — delete not confirmed"
             let status = request != nil ? pending ? "Deleting" : "Attention" : take.finalizationError != nil ? "Attention" : take.state == "complete" ? "Ready" : take.state.capitalized
-            return .init(id: take.recordingId, kind: .recording, title: recordingTitle(of: take) + suffix,
+            // The title is when; how long and what state it is in read once, on the line below.
+            if let duration = take.sourceDurationUs, take.state == "complete" || take.state == "interrupted" {
+                details.insert(ElapsedTime.format(duration), at: 0)
+            }
+            return .init(id: take.recordingId, kind: .recording, title: ElapsedTime.shortTime(of: take.createdAt),
                 status: status, details: details, actions: [
                     .init(.playRecording(take.recordingId), "Play", enabled: state.service == .ready && !pending && take.state != "canceled"),
                     .init(.copyRecordingPrompt(take.recordingId), "Copy agent prompt", enabled: !pending),
@@ -48,8 +55,10 @@ public enum LibraryPresentation {
             let request = state.library.deletions[.project(project.projectId)]
             guard request == nil else { continue }
             let usable = state.service == .ready
-            items.append(.init(id: project.projectId, kind: .project, title: project.title, status: "Project", details: [project.projectId, project.currentRevisionId], actions: [
+            items.append(.init(id: project.projectId, kind: .project, title: project.title,
+                details: ["Created \(ElapsedTime.shortTime(of: project.createdAt))"], actions: [
                 .init(.previewProject(project.projectId), "Preview", enabled: usable),
+                .init(.copyProjectPrompt(project.projectId), "Copy agent prompt", enabled: true),
                 .init(.exportProject(project.projectId, .video), "Export Video…", enabled: usable && exports.choosing == nil),
                 .init(.exportProject(project.projectId, .package), "Export AI Package…", enabled: usable && exports.choosing == nil),
                 .init(.deleteProject(project.projectId), "Delete Project", enabled: usable),
@@ -63,8 +72,8 @@ public enum LibraryPresentation {
         }
         if state.library.projects.isEmpty && items.isEmpty { items.append(.init(id: "projects.empty", kind: .message, title: "No projects on this page.")) }
         return .init(items: items, actions: [
-            .init(.previousProjects, "Previous Projects", enabled: state.service == .ready && state.library.hasPreviousProjectPage && !state.library.projectsRefreshing),
-            .init(.nextProjects, "Next Projects", enabled: state.service == .ready && state.library.nextProjectCursor != nil && !state.library.projectsRefreshing),
+            .init(.previousProjects, "Previous", enabled: state.service == .ready && state.library.hasPreviousProjectPage && !state.library.projectsRefreshing),
+            .init(.nextProjects, "Next", enabled: state.service == .ready && state.library.nextProjectCursor != nil && !state.library.projectsRefreshing),
         ])
     }
 

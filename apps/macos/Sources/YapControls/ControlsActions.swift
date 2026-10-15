@@ -21,6 +21,7 @@ public enum ControlsAction: Hashable, Sendable {
     case restart
     case playRecording(String)
     case copyRecordingPrompt(String)
+    case copyProjectPrompt(String)
     case previewProject(String)
     case exportProject(String, ExportsState.Kind)
     case deleteProject(String)
@@ -62,6 +63,7 @@ public enum ControlsAction: Hashable, Sendable {
         case .restart: "capture.restart"
         case .playRecording(let id): "recording.play.\(id)"
         case .copyRecordingPrompt(let id): "recording.copyPrompt.\(id)"
+        case .copyProjectPrompt(let id): "project.copyPrompt.\(id)"
         case .previewProject(let id): "project.preview.\(id)"
         case .exportProject(let id, let kind): "project.export.\(kind.rawValue).\(id)"
         case .deleteProject(let id): "project.delete.\(id)"

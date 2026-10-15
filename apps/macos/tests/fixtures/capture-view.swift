@@ -146,7 +146,8 @@ import YapControls
             stage.cacheDisplay(in: stage.bounds, to: bitmap)
             window.orderOut(nil)
             view.removeFromSuperview()
-            return bitmap
+            // Measure in sRGB whatever the display: a wide-gamut screen backs the bitmap in Display P3.
+            return bitmap.converting(to: .sRGB, renderingIntent: .default)!
         }
         let chooserSources: [CaptureViewInput.Choice] = [
             .init(title: "Notes — Portrait window", intent: .controls(.selectWindow(7)), preview: portrait),

@@ -193,7 +193,7 @@ import YapControls
                      "A never-turned-on camera leaves nothing to poll: \(neverOn.calls.map(\.0))")
         var neverOnState = ControlsState(); neverOnState.service = .ready; neverOnState.library = settled.state
         let neverOnRow = LibraryPresentation.recordings(for: neverOnState).items[0]
-        precondition(neverOnRow.status == "Ready" && neverOnRow.details == ["Microphone audio"],
+        precondition(neverOnRow.status == "Ready" && neverOnRow.details == ["0:09", "Microphone audio"],
                      "A never-turned-on camera is not an error row: \(neverOnRow.status) \(neverOnRow.details)")
         settled.serviceChanged(ready: false)
 

@@ -24,7 +24,14 @@ function compile(args, sources) {
   commands.push(command);
   execFileSync("swiftc", command, { stdio: "inherit", timeout: 120000 });
 }
-for (const name of ["YapMedia", "YapCapture"]) {
+// The controller also imports YapControls (its window list goes through WindowSource), which
+// lives with the app rather than the native helpers.
+const moduleSources = {
+  YapMedia: join(root, "helpers/mac/Sources/YapMedia"),
+  YapCapture: join(root, "helpers/mac/Sources/YapCapture"),
+  YapControls: join(root, "apps/macos/Sources/YapControls"),
+};
+for (const name of Object.keys(moduleSources)) {
   compile(
     [
       "-emit-library",
@@ -41,7 +48,7 @@ for (const name of ["YapMedia", "YapCapture"]) {
       "-o",
       join(output, `lib${name}.dylib`),
     ],
-    files(join(root, "helpers/mac/Sources", name)),
+    files(moduleSources[name]),
   );
 }
 const app = join(root, "apps/macos/Sources/Yap");
@@ -55,6 +62,7 @@ compile(
     output,
     "-lYapCapture",
     "-lYapMedia",
+    "-lYapControls",
     "-Xlinker",
     "-rpath",
     "-Xlinker",
@@ -81,13 +89,15 @@ compile(
   ],
 );
 const binaries = Object.fromEntries(
-  ["controller-journey", "libYapMedia.dylib", "libYapCapture.dylib"].map((name) => {
-    const bytes = readFileSync(join(output, name));
-    return [
-      name,
-      { bytes: bytes.length, sha256: createHash("sha256").update(bytes).digest("hex") },
-    ];
-  }),
+  ["controller-journey", "libYapMedia.dylib", "libYapCapture.dylib", "libYapControls.dylib"].map(
+    (name) => {
+      const bytes = readFileSync(join(output, name));
+      return [
+        name,
+        { bytes: bytes.length, sha256: createHash("sha256").update(bytes).digest("hex") },
+      ];
+    },
+  ),
 );
 writeFileSync(
   join(output, "identities.json"),

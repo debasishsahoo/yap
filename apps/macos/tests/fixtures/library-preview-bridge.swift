@@ -204,7 +204,7 @@ struct CheckFailure: Error, LocalizedError {
             try require(requests.count == 2 && requests[0].isEqual(to: ["projectId": id]) && requests[1].isEqual(to: ["projectId": id, "revisionId": revision]),
                 "Historical preview request must retain the first returned revision")
             let movie = (ready["published"] as! [String: Any])["output"] as! [String: Any]
-            try require(presentation.movies == [["title": "Preview — \(id) — \(revision)", "file": movie["file"] as! String, "mediaType": movie["mediaType"] as! String]],
+            try require(presentation.movies == [["title": "Project preview", "file": movie["file"] as! String, "mediaType": movie["mediaType"] as! String]],
                 "Historical ready receipt must dispatch its exact movie path and revision")
             preview.tick(); try await until { historical.calls.contains { $0["operation"] as? String == "project.get" } }
             try require(presentation.movies.count == 1 && failures.isEmpty, "Different actual historical head must not replace preview pin")

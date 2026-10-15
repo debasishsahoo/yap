@@ -80,7 +80,11 @@ import CryptoKit
         app.run()
     }
     @MainActor static func pause() async { try? await Task.sleep(for: .milliseconds(100)) }
-    @MainActor static func visible() -> NSWindow? { NSApp.windows.first { $0.isVisible && $0.title.hasPrefix("Preview —") } }
+    /// The preview's video player, wherever the window lays it out.
+    @MainActor static func player(_ window: NSWindow?) -> AVPlayerView? {
+        window?.contentView?.subviews.first { $0 is AVPlayerView } as? AVPlayerView
+    }
+    @MainActor static func visible() -> NSWindow? { NSApp.windows.first { $0.isVisible && player($0) != nil } }
     @MainActor static func runIntegration() async throws {
         _ = NSApplication.shared
         NSApp.setActivationPolicy(.accessory)
@@ -116,13 +120,13 @@ import CryptoKit
         for _ in 0..<150 {
             owner.tick(); await pause()
             precondition(failures.isEmpty, "Preview failed: \\(failures)")
-            if let candidate = (visible()?.contentView as? AVPlayerView)?.player?.currentItem,
+            if let candidate = player(visible())?.player?.currentItem,
                 candidate.status == .readyToPlay { item = candidate; break }
         }
-        guard let item, let window = visible(), let view = window.contentView as? AVPlayerView else {
+        guard let item, let window = visible(), let view = player(window) else {
             fatalError("Actual service preview never became playable")
         }
-        precondition(window.title.hasSuffix(CommandLine.arguments[5]))
+        // The pinned revision is the original 8 s edit; identifiers stay out of the title.
         precondition(abs(CMTimeGetSeconds(item.duration)-8) < 0.001)
         precondition(!view.allowsVideoFrameAnalysis)
         view.player!.pause()
@@ -135,7 +139,7 @@ import CryptoKit
             precondition(failures.isEmpty && visible() === window && view.player?.currentItem === item,
                 "Pinned player changed or lost its renewed lease: failures=\\(failures), visible=\\(visible() === window), item=\\(view.player?.currentItem === item), status=\\(item.status.rawValue), error=\\(String(describing: item.error))")
         }
-        precondition(window.title.hasSuffix(CommandLine.arguments[5]) && abs(CMTimeGetSeconds(item.duration)-8) < 0.001)
+        precondition(abs(CMTimeGetSeconds(item.duration)-8) < 0.001)
         let current = try JSONSerialization.jsonObject(with: await host.call("revision.get", ["projectId":id])) as! [String:Any]
         let document = (current["revision"] as! [String: Any])["document"] as! [String: Any]
         let clips = document["clips"] as! [[String: Any]]

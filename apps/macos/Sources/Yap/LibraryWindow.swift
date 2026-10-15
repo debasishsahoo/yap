@@ -13,6 +13,8 @@ final class LibraryWindow {
         window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 768, height: 476),
             styleMask: [.titled, .closable, .miniaturizable, .resizable], backing: .buffered, defer: false)
         window.title = "Library"
+        // One surface from the title bar down, rather than a separately tinted strip.
+        window.titlebarAppearsTransparent = true
         window.isReleasedWhenClosed = false
         window.contentView = view
         window.contentMinSize = NSSize(width: 566, height: 280)
