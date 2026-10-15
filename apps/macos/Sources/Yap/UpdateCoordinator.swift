@@ -39,7 +39,6 @@ final class UpdateCoordinator {
     private var attempt: Task<Void, Never>?
     private var pendingProgress = false
     private var installerRequested = false
-    private var releaseUnconfirmed = false
     private var manualCheck = false
     private var reported: Status?
     private(set) var status = Status()
@@ -47,20 +46,23 @@ final class UpdateCoordinator {
     private(set) var enabled = false
     private(set) var cleanServiceExit = false
     private var serviceFailed = false
+    /// Consecutive cycles in which a running service answered the permit request with a refusal.
+    private var refusedCycles = 0
     private(set) var checkMessage: String?
     var preferenceChanged: ((Bool) -> Void)?
+    /// Ends the current service, if any, and starts a fresh one. A permit lives only in the running
+    /// service, so this settles one the coordinator could not confirm, without asking anyone to
+    /// quit and reopen the app.
+    var restartService: (() -> Void)?
 
     var mayUpdate: Bool { enabled || manualCheck }
     var canStartManualCheck: Bool {
-        available && !releaseUnconfirmed && !cleanServiceExit && phase == .waiting
+        available && !cleanServiceExit && phase == .waiting
             && install == nil && attempt == nil
             && ["idle", "disabled", "failed"].contains(status.state)
     }
     var checkFailure: ServiceFailure {
-        if releaseUnconfirmed || cleanServiceExit {
-            return ServiceFailure(code: "UPDATE_RESTART_REQUIRED", message: "Quit and reopen the app before checking for updates.")
-        }
-        return ServiceFailure(code: "UPDATE_BUSY", message: "An update is already in progress.", retryable: true)
+        ServiceFailure(code: "UPDATE_BUSY", message: "An update is already in progress.", retryable: true)
     }
     func beginManualCheck() throws(ServiceFailure) {
         guard canStartManualCheck else { throw checkFailure }
@@ -107,7 +109,7 @@ final class UpdateCoordinator {
             publish()
             return
         }
-        if releaseUnconfirmed || cleanServiceExit {
+        if cleanServiceExit {
             publish()
             return
         }
@@ -123,7 +125,7 @@ final class UpdateCoordinator {
         }
     }
     func checking() {
-        guard mayUpdate, !releaseUnconfirmed, !cleanServiceExit else { return }
+        guard mayUpdate, !cleanServiceExit else { return }
         checkMessage = nil
         status.error = nil
         status.availableVersion = nil
@@ -132,7 +134,7 @@ final class UpdateCoordinator {
     }
     func candidate(version: String) {
         status.availableVersion = version
-        if releaseUnconfirmed || cleanServiceExit {
+        if cleanServiceExit {
             publish()
             return
         }
@@ -143,7 +145,7 @@ final class UpdateCoordinator {
     func ready(install: @escaping () -> Void, cancel: @escaping () -> Void) {
         self.install = install
         self.cancel = cancel
-        if releaseUnconfirmed || cleanServiceExit {
+        if cleanServiceExit {
             cancel()
             return
         }
@@ -157,7 +159,7 @@ final class UpdateCoordinator {
     }
     /// Owner notifications, not a retry timer, provide another installation opportunity.
     func progress() {
-        guard mayUpdate, !releaseUnconfirmed, !cleanServiceExit, install != nil else { return }
+        guard mayUpdate, !cleanServiceExit, install != nil else { return }
         if phase == .preparing || (phase == .waiting && attempt != nil) {
             pendingProgress = true
             return
@@ -226,21 +228,22 @@ final class UpdateCoordinator {
                     return
                 }
                 phase = .committed
+                refusedCycles = 0
                 status.blockers = ["launcher"]
                 publish()
                 installerRequested = true
                 install?()
             } catch {
-                if let granted, !(await release(granted, from: host)) { return }
-                guard granted != nil else {
-                    releaseUnconfirmed = true
-                    phase = .failed
-                    fail(
-                        code: "UPDATE_RESTART_REQUIRED",
-                        message: "Cannot confirm update preparation. Quit and reopen the app.")
+                guard generation == current else { return }
+                // A service that cannot answer, or keeps refusing, cannot protect anything either.
+                // Ending it settles any permit it holds, and the update installs without it.
+                if !Self.answered(error) || refusedCycles >= 2 {
+                    permit = nil
+                    endService(host)
                     return
                 }
-                guard generation == current else { return }
+                refusedCycles += 1
+                if let granted, !(await release(granted, from: host)) { return }
                 permit = nil
                 phase = .failed
                 fence(false)
@@ -302,10 +305,15 @@ final class UpdateCoordinator {
         let oldPermit = permit
         permit = nil
         if wasClosing {
-            phase = .failed
-            fail(
-                code: "UPDATE_RESTART_REQUIRED",
-                message: "Update installation stopped. Quit and reopen the app to restore service.")
+            // The service already exited for this installation; the next cycle needs one again.
+            installerRequested = false
+            cleanServiceExit = false
+            serviceFailed = false
+            host = nil
+            phase = .waiting
+            fence(false)
+            fail(code: "UPDATE_FAILED", message: error?.localizedDescription ?? "Update installation stopped.")
+            restartService?()
             return
         }
         phase = .cancelling
@@ -313,7 +321,6 @@ final class UpdateCoordinator {
         let activeAttempt = attempt
         Task { @MainActor in
             await activeAttempt?.value
-            guard !releaseUnconfirmed else { return }
             if let oldPermit, let host {
                 guard await release(oldPermit, from: host) else { return }
             }
@@ -343,7 +350,7 @@ final class UpdateCoordinator {
         status.state = state
         cancel?()
         // Before Sparkle receives Install there is no installer exclusion to drain.
-        if old == .waiting || old == .failed, !installerRequested, !releaseUnconfirmed,
+        if old == .waiting || old == .failed, !installerRequested,
             !cleanServiceExit, permit == nil, attempt == nil
         {
             if install == nil { phase = .waiting }
@@ -358,18 +365,42 @@ final class UpdateCoordinator {
         let parameters = status.parameters
         Task { @MainActor in _ = try? await host.call("update.report", parameters) }
     }
+    /// False when the service could not confirm the release; the coordinator has then restarted
+    /// the service, which settles the permit, and the caller has nothing left to undo.
     private func release(_ id: String, from host: ServiceHost) async -> Bool {
         do {
             _ = try await host.call("update.release", ["permitId": id])
             return true
         } catch {
-            releaseUnconfirmed = true
-            phase = .failed
-            fail(
-                code: "UPDATE_RESTART_REQUIRED",
-                message: "Cannot confirm update cancellation. Quit and reopen the app.")
+            permit = nil
+            installerRequested = false
+            self.host = nil
+            phase = .waiting
+            fence(false)
+            status.blockers = []
+            status.state = install == nil ? (enabled ? "idle" : "disabled") : "waiting"
+            publish()
+            restartService?()
             return false
         }
+    }
+    /// The service is stopped off the main actor: a hung one is escalated against within
+    /// ServiceHost's own deadlines. Its exit reaches `serviceUnavailable`, which installs.
+    private func endService(_ host: ServiceHost) {
+        if self.host === host { self.host = nil }
+        phase = .waiting
+        fence(false)
+        DispatchQueue.global(qos: .userInitiated).async {
+            host.shutdown()
+            DispatchQueue.main.async { MainActor.assumeIsolated { self.serviceUnavailable() } }
+        }
+    }
+    /// Whether a running service answered at all. No answer, or an unreadable one, means the
+    /// service is not working; a refusal is an answer and is retried in a later cycle.
+    private static func answered(_ error: Error) -> Bool {
+        guard let failure = error as? ServiceFailure else { return false }
+        return failure.code != "TIMEOUT" && failure.code != "INVALID_RESPONSE"
+            && !failure.code.hasPrefix("SERVICE_")
     }
     private struct Preparation: Decodable {
         let kind: String

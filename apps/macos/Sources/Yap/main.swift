@@ -21,6 +21,8 @@ private struct ServiceHealth: Decodable {
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var controls: RecordingControls?
     private var service: ServiceHost?
+    /// Counts service starts; state reports from a service that has since been replaced are ignored.
+    private var serviceGeneration = 0
     private var controller: CaptureController?
     private var fixture: NSWindow?
     private var probe: ControlsProbe?
@@ -71,6 +73,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }, fence: { [weak self] fenced in self?.controls?.fenceForUpdate(fenced) },
         changed: { [weak self] in self?.refreshUpdateControls() })
         self.updates = updates
+        updates.restartService = { [weak self] in self?.restartService() }
         controls?.updateProgress = { [weak updates] in updates?.progress() }
         controller.updateProgress = { [weak updates] in updates?.progress() }
         sparkle = SparkleDriver(owner: updates, changed: { [weak self] in self?.refreshUpdateControls() }) { [weak self] in
@@ -209,10 +212,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// interpreter runs child processes, so it answers back on the main actor rather
     /// than holding it while a candidate is probed.
     private func startService(capture: CaptureController) {
+        serviceGeneration += 1
+        let generation = serviceGeneration
         apply(.starting)
         startup = ServiceBundle.resolve { [weak self] result in
             Task { @MainActor in
-                guard let self, !self.terminating else { return }
+                guard let self, !self.terminating, self.serviceGeneration == generation else { return }
                 switch result {
                 case .failure(let failure):
                     self.apply(.unavailable(code: failure.code, message: failure.message))
@@ -248,7 +253,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                                 }
                             }
                         }, onState: { [weak self] state in
-                            Task { @MainActor in self?.apply(state) }
+                            Task { @MainActor in
+                                guard let self, self.serviceGeneration == generation else { return }
+                                self.apply(state)
+                            }
                     }, onUpdateProgress: { [weak self] in
                         MainActor.assumeIsolated { self?.updates?.progress() }
                     })
@@ -256,6 +264,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     capture.attach(to: host)
                     self.controls?.attach(to: host)
                     host.start()
+                }
+            }
+        }
+    }
+
+    /// The updater's way out of a service it cannot trust: the old process is stopped off the main
+    /// actor, within ServiceHost's own escalation deadlines, and a fresh one is started.
+    private func restartService() {
+        guard let controller, !terminating else { return }
+        let old = service
+        service = nil
+        serviceGeneration += 1
+        DispatchQueue.global(qos: .userInitiated).async {
+            old?.shutdown()
+            DispatchQueue.main.async {
+                MainActor.assumeIsolated {
+                    guard !self.terminating else { return }
+                    self.startService(capture: controller)
                 }
             }
         }

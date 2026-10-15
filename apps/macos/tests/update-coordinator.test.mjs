@@ -150,7 +150,7 @@ test("opt-out after Install drains SDK cancellation before reopening and cannot 
   );
 });
 
-test("lost release acknowledgement keeps the native fence and reports manual restart", (t) => {
+test("lost release acknowledgement restarts the service and lowers the native fence", (t) => {
   const lost = peer.replace(
     "send({event:'result',response:{id:request.id,ok:true,data}});",
     "if (request.operation !== 'update.release') send({event:'result',response:{id:request.id,ok:true,data}});",
@@ -159,17 +159,91 @@ test("lost release acknowledgement keeps the native fence and reports manual res
     run(
       t,
       `
+ owner.restartService = { trace.append("restart") }
  blockers = []
  owner.ready(install: { trace.append("install") }, cancel: { trace.append("cancel") })
  try? await Task.sleep(for: .milliseconds(70))
  owner.setEnabled(false); owner.cycleFinished(error:nil)
- try? await Task.sleep(for: .milliseconds(1200))
- guard fenced, owner.status.error?.code == "UPDATE_RESTART_REQUIRED", !owner.cleanServiceExit else { print(owner.status); exit(1) }
- print("restart-required")
+ for _ in 0..<300 { if trace.contains("restart") { break }; try? await Task.sleep(for: .milliseconds(10)) }
+ guard !fenced, owner.status.error?.code != "UPDATE_RESTART_REQUIRED", !owner.cleanServiceExit else { print(owner.status, fenced); exit(1) }
+ print(trace.filter { $0 == "restart" }.joined())
  `,
       lost,
     ),
-    ["restart-required"],
+    ["restart"],
+  );
+});
+
+test("a service that never answers the permit request is ended and the update installs without it", (t) => {
+  const silent = peer.replace(
+    "if (request.operation === 'update.prepare') permit = 'permit';",
+    "if (request.operation === 'update.prepare') return;",
+  );
+  assert.deepEqual(
+    run(
+      t,
+      `
+ blockers = []
+ owner.ready(install: { trace.append("install"); owner.installing { trace.append("authorize") } },
+             cancel: { trace.append("cancel") })
+ for _ in 0..<1000 { if owner.mayTerminateForUpdate { break }; try? await Task.sleep(for: .milliseconds(10)) }
+ guard owner.mayTerminateForUpdate, fenced else { print(owner.status, trace, fenced); exit(1) }
+ do { _ = try await host.call("service.health"); print("service-still-running"); exit(1) } catch {}
+ print(trace.joined(separator:","))
+ `,
+      silent,
+    ),
+    ["install,authorize"],
+  );
+});
+
+test("a service that refuses the permit in three cycles running is ended and the update installs", (t) => {
+  const refusing = peer.replace(
+    "if (request.operation === 'update.prepare') permit = 'permit';",
+    `if (request.operation === 'update.prepare') {
+ send({event:'result',response:{id:request.id,ok:false,error:{code:'INTERNAL',message:'admission broke'}}}); return;
+ }`,
+  );
+  assert.deepEqual(
+    run(
+      t,
+      `
+ blockers = []
+ for cycle in 1...3 {
+   owner.candidate(version: "2")
+   owner.ready(install: { trace.append("install"); owner.installing { trace.append("authorize") } },
+               cancel: { trace.append("cancel"); owner.cycleFinished(error: nil) })
+   for _ in 0..<500 { if trace.count >= cycle || owner.mayTerminateForUpdate { break }; try? await Task.sleep(for: .milliseconds(10)) }
+   try? await Task.sleep(for: .milliseconds(30))
+   guard !fenced || owner.mayTerminateForUpdate else { print("fence left up", owner.status); exit(1) }
+ }
+ for _ in 0..<500 { if owner.mayTerminateForUpdate { break }; try? await Task.sleep(for: .milliseconds(10)) }
+ guard owner.mayTerminateForUpdate else { print(owner.status, trace); exit(1) }
+ print(trace.joined(separator:","))
+ `,
+      refusing,
+    ),
+    ["cancel,cancel,install,authorize"],
+  );
+});
+
+test("an install that stops after the service closed restarts the service for the next cycle", (t) => {
+  assert.deepEqual(
+    run(
+      t,
+      `
+ owner.restartService = { trace.append("restart") }
+ blockers = []
+ owner.ready(install: { trace.append("install"); owner.installing { trace.append("authorize") } },
+             cancel: { trace.append("cancel") })
+ for _ in 0..<300 { if owner.mayTerminateForUpdate { break }; try? await Task.sleep(for: .milliseconds(10)) }
+ guard owner.mayTerminateForUpdate else { print(owner.status); exit(1) }
+ owner.cycleFinished(error: ServiceFailure(code: "SDK_FAILURE", message: "replacement failed"))
+ guard !owner.cleanServiceExit, !fenced, owner.canStartManualCheck || owner.status.state == "failed" else { print(owner.status, fenced); exit(1) }
+ print(trace.joined(separator:","))
+ `,
+    ),
+    ["install,authorize,restart"],
   );
 });
 
