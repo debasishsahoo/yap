@@ -260,11 +260,8 @@ final class PreviewWindow: NSObject, PreviewPresenting, NSWindowDelegate {
     }
 
     func close() {
-        compositionTask?.cancel()
-        compositionTask = nil
+        stopPlayback()
         playerObservation = nil
-        playerView?.player?.pause()
-        playerView?.player?.replaceCurrentItem(with: nil)
         playerView?.player = nil
         window?.delegate = nil
         window?.close()
@@ -287,10 +284,15 @@ final class PreviewWindow: NSObject, PreviewPresenting, NSWindowDelegate {
     /// that would stop it.
     func windowWillClose(_ notification: Notification) {
         guard notification.object as? NSWindow === window else { return }
+        stopPlayback()
+        onClose?()
+    }
+
+    private func stopPlayback() {
         compositionTask?.cancel()
+        compositionTask = nil
         playerView?.player?.pause()
         playerView?.player?.replaceCurrentItem(with: nil)
-        onClose?()
     }
 
     @objc private func retryPreview() { onRetry?() }
